@@ -296,7 +296,7 @@ function initSelect(){
 }
 window.doLogin=()=>{ const name=document.getElementById('loginName').value; if(!name){toast('請選擇姓名','error');return;} const s=STAFF.find(x=>x.name===name); me={name:s.name,shift:s.shift,isAdmin:false}; enterApp(); };
 window.doAdminLogin=()=>{ if(document.getElementById('adminPwd').value!==ADMIN_PWD){toast('密碼錯誤','error');return;} me={name:'管理者',shift:null,isAdmin:true}; enterApp(); };
-async function enterApp(){
+async async function enterApp(){
   document.getElementById('loginScreen').classList.remove('active');
   document.getElementById('appScreen').classList.add('active');
   document.getElementById('adminTab').style.display=me.isAdmin?'block':'none';
@@ -354,6 +354,9 @@ window.logout=()=>{
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('tabMyOff').classList.add('active');
   document.getElementById('pageMyOff').classList.add('active');
+  // 重置右上角使用者顯示
+  const chip=document.getElementById('userChip');
+  if(chip) chip.innerHTML=`<div class="user-dot dot-admin"></div><span id="userChipName">—</span>`;
 };
 
 // ── Tabs ──
