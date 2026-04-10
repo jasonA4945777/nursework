@@ -2754,11 +2754,14 @@ window.openPrevMonthModal = async function(){
   const m=+document.getElementById('admMonth').value;
   const pm=m===1?12:m-1, py=m===1?y-1:y;
 
-  // 載入已儲存的連班資料
-  let savedStreaks={};
+  // 載入已儲存資料
+  let savedStreaks={}, savedLastShifts={};
   try{
     const pd=await getDoc(doc(db,'monthEndStreak',`${py}_${pm}`));
-    if(pd.exists()) savedStreaks=pd.data().streaks||{};
+    if(pd.exists()){
+      savedStreaks=pd.data().streaks||{};
+      savedLastShifts=pd.data().lastShifts||{};
+    }
   }catch(e){}
 
   const grid=document.getElementById('prevMonthGrid');
@@ -2766,48 +2769,50 @@ window.openPrevMonthModal = async function(){
 
   // 標題列
   const header=document.createElement('div');
-  header.style.cssText='display:grid;grid-template-columns:80px repeat(6,1fr);gap:6px;align-items:center;margin-bottom:4px;font-size:11px;font-weight:700;color:#64748b';
-  header.innerHTML=`<div>姓名</div>${[6,5,4,3,2,1].map(d=>`<div style="text-align:center">${py}/${pm}月<br>倒數第${d}天</div>`).join('')}`;
+  header.style.cssText='display:grid;grid-template-columns:90px 80px 100px;gap:10px;font-size:11px;font-weight:700;color:#64748b;margin-bottom:6px;padding:0 8px';
+  header.innerHTML='<div>姓名</div><div style="text-align:center">連班天數<br><span style="font-weight:400;font-size:10px">0～6天</span></div><div style="text-align:center">最後班別<br><span style="font-weight:400;font-size:10px">最後一天排什麼</span></div>';
   grid.appendChild(header);
 
-  // 每人一列
   STAFF.forEach(s=>{
-    const saved=savedStreaks[s.name]||0;
-    // 預設：根據已儲存的連班天數填入最後幾天
+    const savedDays=savedStreaks[s.name]||0;
+    const savedShift=savedLastShifts[s.name]||(s.shift==='EN'?'E':s.shift);
+
     const row=document.createElement('div');
-    row.style.cssText='display:grid;grid-template-columns:80px repeat(6,1fr);gap:6px;align-items:center;padding:8px;background:#f8fafc;border-radius:10px';
+    row.style.cssText='display:grid;grid-template-columns:90px 80px 100px;gap:10px;align-items:center;padding:8px;background:#f8fafc;border-radius:10px;margin-bottom:6px';
 
     // 姓名
     const nameEl=document.createElement('div');
-    nameEl.style.cssText='font-size:13px;font-weight:600;color:#1a1d2e';
+    nameEl.style.cssText='font-size:13px;font-weight:600';
     nameEl.textContent=s.name;
     row.appendChild(nameEl);
 
-    // 最後6天的班別輸入（倒數第6天 → 倒數第1天）
-    const eff=s.shift==='EN'?'E':s.shift;
-    for(let i=6;i>=1;i--){
-      const cell=document.createElement('select');
-      cell.dataset.name=s.name;
-      cell.dataset.pos=i; // 1=最後一天, 6=倒數第六天
-      cell.style.cssText='text-align:center;border:1.5px solid #e2e8f0;border-radius:8px;padding:5px;font-size:13px;font-weight:700;background:#fff;cursor:pointer';
-      // 選項
-      [['OFF','OFF','#c4c7d6'],['D','D','#16a34a'],['E','E','#d97706'],['N','N','#7c3aed']].forEach(([val,label,color])=>{
-        const opt=document.createElement('option');
-        opt.value=val; opt.textContent=label;
-        opt.style.color=color;
-        cell.appendChild(opt);
-      });
-      // 預設值：根據已儲存連班天數自動填入
-      // 連班 saved 天：最後 saved 天 = 該班別，其餘 = OFF
-      if(i<=saved) cell.value=eff;
-      else cell.value='OFF';
-      // 顏色更新
-      cell.addEventListener('change',function(){
-        this.style.color=this.value==='D'?'#16a34a':this.value==='E'?'#d97706':this.value==='N'?'#7c3aed':'#c4c7d6';
-      });
-      cell.style.color=cell.value==='D'?'#16a34a':cell.value==='E'?'#d97706':cell.value==='N'?'#7c3aed':'#c4c7d6';
-      row.appendChild(cell);
-    }
+    // 連班天數輸入
+    const daysInput=document.createElement('input');
+    daysInput.type='number';
+    daysInput.min=0; daysInput.max=6;
+    daysInput.value=savedDays;
+    daysInput.dataset.name=s.name;
+    daysInput.dataset.type='days';
+    daysInput.style.cssText='text-align:center;border:1.5px solid #e2e8f0;border-radius:8px;padding:7px;font-size:14px;font-weight:700;width:100%;background:#fff';
+    row.appendChild(daysInput);
+
+    // 最後班別選單
+    const shiftSel=document.createElement('select');
+    shiftSel.dataset.name=s.name;
+    shiftSel.dataset.type='shift';
+    shiftSel.style.cssText='border:1.5px solid #e2e8f0;border-radius:8px;padding:7px;font-size:13px;font-weight:700;width:100%;background:#fff;cursor:pointer';
+    [['OFF','OFF 休假'],['D','D 白班'],['E','E 小夜'],['N','N 大夜']].forEach(([val,label])=>{
+      const opt=document.createElement('option');
+      opt.value=val; opt.textContent=label;
+      shiftSel.appendChild(opt);
+    });
+    shiftSel.value=savedDays>0?savedShift:'OFF';
+    // 天數為0時自動設OFF
+    daysInput.addEventListener('input',function(){
+      if(+this.value===0) shiftSel.value='OFF';
+      else if(shiftSel.value==='OFF') shiftSel.value=s.shift==='EN'?'E':s.shift;
+    });
+    row.appendChild(shiftSel);
     grid.appendChild(row);
   });
 
@@ -2819,24 +2824,14 @@ window.savePrevMonthStreaks = async function(){
   const m=+document.getElementById('admMonth').value;
   const pm=m===1?12:m-1, py=m===1?y-1:y;
 
-  const streaks={};
-  const lastShifts={}; // 最後一天的班別（供跨月連班判斷）
-
+  const streaks={}, lastShifts={};
   STAFF.forEach(s=>{
-    const cells=[...document.querySelectorAll(`select[data-name="${s.name}"]`)];
-    // pos=1是最後一天，pos=6是倒數第6天
-    // 計算月底連班天數（從最後一天往前數，遇到OFF停止）
-    let streak=0;
-    let lastShift='OFF';
-    for(let pos=1;pos<=6;pos++){
-      const cell=cells.find(c=>+c.dataset.pos===pos);
-      const val=cell?.value||'OFF';
-      if(pos===1) lastShift=val;
-      if(val==='OFF') break;
-      streak++;
-    }
-    streaks[s.name]=streak;
-    lastShifts[s.name]=lastShift;
+    const daysEl=document.querySelector(`input[data-name="${s.name}"][data-type="days"]`);
+    const shiftEl=document.querySelector(`select[data-name="${s.name}"][data-type="shift"]`);
+    const days=Math.min(6,Math.max(0,+(daysEl?.value||0)));
+    const shift=shiftEl?.value||'OFF';
+    streaks[s.name]=days;
+    lastShifts[s.name]=days>0?shift:'OFF';
   });
 
   loader(true);
@@ -2848,19 +2843,20 @@ window.savePrevMonthStreaks = async function(){
     });
     loader(false);
     document.getElementById('prevMonthModal').style.display='none';
+    window._lastMonthShifts=lastShifts;
 
-    // 顯示摘要
     const statusEl=document.getElementById('importStatus');
-    const streakInfo=Object.entries(streaks).filter(([,v])=>v>0).map(([k,v])=>`${k}:${v}天`).join('、');
+    const info=Object.entries(streaks).filter(([,v])=>v>0).map(([k,v])=>`${k}:${v}天(${lastShifts[k]})`).join('、');
     statusEl.style.display='block';
     statusEl.innerHTML=`✅ 上月連班資料已儲存（${py}年${pm}月）<br>
-      ${streakInfo?`<span style="color:#15803d">有連班：${streakInfo}</span>`:'<span style="color:#15803d">所有人月底均無連班</span>'}`;
-    toast(`上月連班資料已儲存 ✓`,'success');
+      ${info?`<span style="color:#15803d">有連班：${info}</span>`:'<span style="color:#15803d">所有人月底均無連班</span>'}`;
+    toast('上月連班資料已儲存 ✓','success');
   }catch(e){
     loader(false);
     toast('儲存失敗：'+e.message,'error');
   }
 };
+
 
 // ── 自訂警告 Modal ──
 window._warnBtns = [];
