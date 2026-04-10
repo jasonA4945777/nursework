@@ -1214,10 +1214,15 @@ window.generateSchedule=async()=>{
     // 預假分類
     const realOff=new Set();
     const pubOff=new Set();
+    let idsNotes=null, o2Notes=null;
     raw.forEach(o=>{
       const d=o.day; if(d<0||d>=dIM) return;
-      const isPub=!!(o.note&&/上課|支援|公假|出勤/.test(o.note));
+      const isIdsNote=!!(o.note&&/IDS|ids/.test(o.note));
+      const isO2Note=!!(o.note&&/02/.test(o.note));
+      const isPub=!!(o.note&&/上課|支援|公假|出勤|IDS|ids|02/.test(o.note));
       if(isPub) pubOff.add(d); else realOff.add(d);
+      if(isIdsNote) { if(!idsNotes) idsNotes=new Set(); idsNotes.add(d); }
+      if(isO2Note) { if(!o2Notes) o2Notes=new Set(); o2Notes.add(d); }
     });
 
     const iaOffs=ia!==null?Math.max(0,dIM-ia):0;
@@ -1230,7 +1235,8 @@ window.generateSchedule=async()=>{
     return {
       name:s.name, shift:s.shift,
       allowed, isFlex, isN, ia,
-      realOff, pubOff, myGoal, iaOffs,
+      realOff, pubOff, myGoal,
+      idsDays:idsNotes, o2Days:o2Notes,
       A:new Array(dIM).fill(null),
       last:pl, streak:ps,
       offCnt:0, workCnt:0,
@@ -1327,11 +1333,12 @@ window.generateSchedule=async()=>{
     // ── Step1：強制鎖定 ──
     nurses.forEach(n=>{
       if(n.A[d0]!==null) return;
-      if(n.forceOff?.has(d0)){set(n,d0,'OFF');return;}
       if(n.realOff.has(d0)){set(n,d0,'OFF');return;}
       if(n.ia!==null&&d0>=n.ia){set(n,d0,'OFF');return;}
-      if(n.tempShift?.[d0]&&!n.realOff.has(d0)){set(n,d0,n.tempShift[d0]);return;}
+      // pubOff（含IDS/O2）優先於forceOff，確保IDS那天一定排上班
       if(n.pubOff.has(d0)){set(n,d0,n.allowed[0]);return;}
+      if(n.forceOff?.has(d0)){set(n,d0,'OFF');return;}
+      if(n.tempShift?.[d0]){set(n,d0,n.tempShift[d0]);return;}
       if(n.forceWork?.has(d0)){
         if(canWork(n,d0,n.allowed[0])) set(n,d0,n.allowed[0]);
         else set(n,d0,'OFF');
