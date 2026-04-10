@@ -462,9 +462,8 @@ thead th.col-prev{background:#f8f9ff;font-size:9px;color:var(--text2);position:s
             <option value="1">1月</option><option value="2">2月</option><option value="3">3月</option><option value="4">4月</option><option value="5">5月</option><option value="6">6月</option><option value="7">7月</option><option value="8">8月</option><option value="9">9月</option><option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
           </select>
         </div>
-        <button class="btn btn-sm" onclick="triggerImportExcel()" style="align-self:flex-end;background:#f0fdf4;color:#16a34a;border:1px solid #86efac;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer">📂 匯入上月班表</button>
+        <button class="btn btn-sm" onclick="openPrevMonthModal()" style="align-self:flex-end;background:#f0fdf4;color:#16a34a;border:1px solid #86efac;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer">📅 上月連班設定</button>
   <button class="btn btn-primary btn-sm" onclick="generateSchedule()" style="align-self:flex-end">⚡ 自動排班</button>
-  <input type="file" id="importExcelInput" accept=".xlsx,.xls" style="display:none" onchange="importPrevMonthExcel(this)">
 </div>
 
 <!-- 匯入狀態提示 -->
@@ -570,6 +569,21 @@ thead th.col-prev{background:#f8f9ff;font-size:9px;color:var(--text2);position:s
     <div id="suggestList"></div>
     <button onclick="document.getElementById('suggestModal').classList.remove('show')" 
       style="width:100%;margin-top:8px;padding:9px;border:none;border-radius:8px;background:#f1f5f9;color:#475569;font-weight:700;cursor:pointer;font-size:13px">關閉</button>
+  </div>
+</div>
+
+<!-- 上月連班設定 Modal -->
+<div id="prevMonthModal" style="position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:400;overflow-y:auto">
+  <div style="background:#fff;border-radius:16px;padding:24px;width:680px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.2)">
+    <div style="font-size:16px;font-weight:700;margin-bottom:4px">📅 上月連班設定</div>
+    <div style="font-size:12px;color:#64748b;margin-bottom:16px">輸入每位護理師上個月最後幾天的班別，供本月排班參考連班規則</div>
+    <div id="prevMonthGrid" style="display:grid;gap:10px"></div>
+    <div style="display:flex;gap:10px;margin-top:18px;justify-content:flex-end">
+      <button onclick="document.getElementById('prevMonthModal').style.display='none'"
+        style="padding:10px 20px;border-radius:10px;border:1.5px solid #e2e8f0;background:#f8fafc;color:#374151;font-weight:600;cursor:pointer;font-size:13px">取消</button>
+      <button onclick="savePrevMonthStreaks()"
+        style="padding:10px 24px;border-radius:10px;border:none;background:#2563eb;color:#fff;font-weight:700;cursor:pointer;font-size:13px">💾 儲存並套用</button>
+    </div>
   </div>
 </div>
 
@@ -1148,7 +1162,10 @@ window.generateSchedule=async()=>{
   try{
     const pm=m===1?12:m-1, py=m===1?y-1:y;
     const pd=await getDoc(doc(db,'monthEndStreak',`${py}_${pm}`));
-    if(pd.exists()) prevStreaks=pd.data().streaks||{};
+    if(pd.exists()){
+      prevStreaks=pd.data().streaks||{};
+      window._lastMonthShifts=pd.data().lastShifts||{};
+    }
     const info=Object.entries(prevStreaks).filter(([,v])=>v>0).map(([k,v])=>`${k}:${v}天`).join('、');
     if(info) toast(`已載入上月連班：${info}`,'info');
   }catch(e){}
@@ -2730,6 +2747,120 @@ async function autoLoadSchedule(){
     toast(`已自動載入 ${y}年${m}月 儲存的班表`,'info');
   }catch(e){}
 }
+
+// ── 上月連班設定 ──
+window.openPrevMonthModal = async function(){
+  const y=+document.getElementById('admYear').value;
+  const m=+document.getElementById('admMonth').value;
+  const pm=m===1?12:m-1, py=m===1?y-1:y;
+
+  // 載入已儲存的連班資料
+  let savedStreaks={};
+  try{
+    const pd=await getDoc(doc(db,'monthEndStreak',`${py}_${pm}`));
+    if(pd.exists()) savedStreaks=pd.data().streaks||{};
+  }catch(e){}
+
+  const grid=document.getElementById('prevMonthGrid');
+  grid.innerHTML='';
+
+  // 標題列
+  const header=document.createElement('div');
+  header.style.cssText='display:grid;grid-template-columns:80px repeat(6,1fr);gap:6px;align-items:center;margin-bottom:4px;font-size:11px;font-weight:700;color:#64748b';
+  header.innerHTML=`<div>姓名</div>${[6,5,4,3,2,1].map(d=>`<div style="text-align:center">${py}/${pm}月<br>倒數第${d}天</div>`).join('')}`;
+  grid.appendChild(header);
+
+  // 每人一列
+  STAFF.forEach(s=>{
+    const saved=savedStreaks[s.name]||0;
+    // 預設：根據已儲存的連班天數填入最後幾天
+    const row=document.createElement('div');
+    row.style.cssText='display:grid;grid-template-columns:80px repeat(6,1fr);gap:6px;align-items:center;padding:8px;background:#f8fafc;border-radius:10px';
+
+    // 姓名
+    const nameEl=document.createElement('div');
+    nameEl.style.cssText='font-size:13px;font-weight:600;color:#1a1d2e';
+    nameEl.textContent=s.name;
+    row.appendChild(nameEl);
+
+    // 最後6天的班別輸入（倒數第6天 → 倒數第1天）
+    const eff=s.shift==='EN'?'E':s.shift;
+    for(let i=6;i>=1;i--){
+      const cell=document.createElement('select');
+      cell.dataset.name=s.name;
+      cell.dataset.pos=i; // 1=最後一天, 6=倒數第六天
+      cell.style.cssText='text-align:center;border:1.5px solid #e2e8f0;border-radius:8px;padding:5px;font-size:13px;font-weight:700;background:#fff;cursor:pointer';
+      // 選項
+      [['OFF','OFF','#c4c7d6'],['D','D','#16a34a'],['E','E','#d97706'],['N','N','#7c3aed']].forEach(([val,label,color])=>{
+        const opt=document.createElement('option');
+        opt.value=val; opt.textContent=label;
+        opt.style.color=color;
+        cell.appendChild(opt);
+      });
+      // 預設值：根據已儲存連班天數自動填入
+      // 連班 saved 天：最後 saved 天 = 該班別，其餘 = OFF
+      if(i<=saved) cell.value=eff;
+      else cell.value='OFF';
+      // 顏色更新
+      cell.addEventListener('change',function(){
+        this.style.color=this.value==='D'?'#16a34a':this.value==='E'?'#d97706':this.value==='N'?'#7c3aed':'#c4c7d6';
+      });
+      cell.style.color=cell.value==='D'?'#16a34a':cell.value==='E'?'#d97706':cell.value==='N'?'#7c3aed':'#c4c7d6';
+      row.appendChild(cell);
+    }
+    grid.appendChild(row);
+  });
+
+  document.getElementById('prevMonthModal').style.display='flex';
+};
+
+window.savePrevMonthStreaks = async function(){
+  const y=+document.getElementById('admYear').value;
+  const m=+document.getElementById('admMonth').value;
+  const pm=m===1?12:m-1, py=m===1?y-1:y;
+
+  const streaks={};
+  const lastShifts={}; // 最後一天的班別（供跨月連班判斷）
+
+  STAFF.forEach(s=>{
+    const cells=[...document.querySelectorAll(`select[data-name="${s.name}"]`)];
+    // pos=1是最後一天，pos=6是倒數第6天
+    // 計算月底連班天數（從最後一天往前數，遇到OFF停止）
+    let streak=0;
+    let lastShift='OFF';
+    for(let pos=1;pos<=6;pos++){
+      const cell=cells.find(c=>+c.dataset.pos===pos);
+      const val=cell?.value||'OFF';
+      if(pos===1) lastShift=val;
+      if(val==='OFF') break;
+      streak++;
+    }
+    streaks[s.name]=streak;
+    lastShifts[s.name]=lastShift;
+  });
+
+  loader(true);
+  try{
+    await setDoc(doc(db,'monthEndStreak',`${py}_${pm}`),{
+      year:py, month:pm, streaks, lastShifts,
+      savedAt:new Date().toISOString(),
+      source:'manual_input',
+    });
+    loader(false);
+    document.getElementById('prevMonthModal').style.display='none';
+
+    // 顯示摘要
+    const statusEl=document.getElementById('importStatus');
+    const streakInfo=Object.entries(streaks).filter(([,v])=>v>0).map(([k,v])=>`${k}:${v}天`).join('、');
+    statusEl.style.display='block';
+    statusEl.innerHTML=`✅ 上月連班資料已儲存（${py}年${pm}月）<br>
+      ${streakInfo?`<span style="color:#15803d">有連班：${streakInfo}</span>`:'<span style="color:#15803d">所有人月底均無連班</span>'}`;
+    toast(`上月連班資料已儲存 ✓`,'success');
+  }catch(e){
+    loader(false);
+    toast('儲存失敗：'+e.message,'error');
+  }
+};
 
 // ── 自訂警告 Modal ──
 window._warnBtns = [];
