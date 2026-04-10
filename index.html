@@ -1235,9 +1235,18 @@ window.generateSchedule=async()=>{
       n.o2Days=n.o2Days||new Set(); n.o2Days.add(d0);
     } else if(r.type==='ids'&&n){
       // IDS：算上班，不算OFF，不計入人力，顯示橘色
+      // 前一天和後一天強制 OFF
       if(n.realOff.has(d0)) return;
       n.pubOff=n.pubOff||new Set(); n.pubOff.add(d0);
       n.idsDays=n.idsDays||new Set(); n.idsDays.add(d0);
+      // 前一天強制OFF
+      if(d0>0){
+        n.forceOff=n.forceOff||new Set(); n.forceOff.add(d0-1);
+      }
+      // 後一天強制OFF
+      if(d0<dIM-1){
+        n.forceOff=n.forceOff||new Set(); n.forceOff.add(d0+1);
+      }
     } else if(r.type==='force-work'&&n){
       if(n.realOff.has(d0)) return;
       n.forceWork=n.forceWork||new Set(); n.forceWork.add(d0);
@@ -1409,6 +1418,15 @@ window.generateSchedule=async()=>{
   // 輸出
   // ══════════════════════════════════════
   const sched={};
+  // IDS 前後天強制OFF（備註方式的IDS）
+  nurses.forEach(n=>{
+    if(!n.idsDays) return;
+    n.idsDays.forEach(d=>{
+      if(d>0) { n.A[d-1]='OFF'; }
+      if(d<dIM-1) { n.A[d+1]='OFF'; }
+    });
+  });
+
   nurses.forEach(n=>{
     const arr=[...n.A];
     if(n.o2Days) n.o2Days.forEach(d=>{ if(arr[d]&&arr[d]!=='OFF') arr[d]='O2'; });
@@ -1730,6 +1748,14 @@ window.exportScheduleExcel = async function(){
   }
 
   const WD=['日','一','二','三','四','五','六'];
+
+  // 欄號轉換工具（1→A, 26→Z, 27→AA）
+  function colLetter(n){
+    let s='';
+    while(n>0){s=String.fromCharCode(64+(n%26||26))+s;n=Math.floor((n-1)/26);}
+    return s;
+  }
+
   const wb=new ExcelJS.Workbook();
   wb.creator='護理排班系統';
   const ws=wb.addWorksheet(`${y}.${String(m).padStart(2,'0')}`);
@@ -1938,16 +1964,8 @@ window.exportScheduleExcel = async function(){
       }
 
       // Excel 公式：用 COUNTIF 計算 OFF 天數
-      // 資料範圍：第 curRow 列，第3欄到第 dIM+2 欄
       const dataRowRef = curRow;
-      const colStart = String.fromCharCode(67); // C欄（第3欄）
-      // 若欄數超過Z，需用兩個字母，這裡用 ExcelJS 的欄號轉換
-      function colLetter(n){ // 1-based
-        let s='';
-        while(n>0){s=String.fromCharCode(64+(n%26||26))+s;n=Math.floor((n-1)/26);}
-        return s;
-      }
-      const startCol=colLetter(3); // C
+      const startCol=colLetter(3);
       const endCol=colLetter(dIM+2);
       const rangeRef=`${startCol}${dataRowRef}:${endCol}${dataRowRef}`;
 
@@ -1971,6 +1989,11 @@ window.exportScheduleExcel = async function(){
       totalOffCell.value={formula:`COUNTIF(${rangeRef},"OFF")`};
       totalOffCell.font=font(8,true,'374151');
       totalOffCell.alignment=align(); totalOffCell.border=border();
+
+      // 記錄此人列號供統計列公式使用
+      const effSh3=schedState?.pubShifts?.[s.name]||s.shift;
+      const shKey3=Array.isArray(effSh3)||effSh3==='EN'?'E':effSh3;
+      if(shiftRows[shKey3]) shiftRows[shKey3].push(curRow);
 
       curRow++;
     });
