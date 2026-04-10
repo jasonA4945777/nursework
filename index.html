@@ -1158,6 +1158,13 @@ window.generateSchedule=async()=>{
   loader(false);
 
   await loadSpecialRules(y,m);
+  // 明確顯示載入的特殊規則數量和年月
+  toast(`排班月份：${y}年${m}月，載入特殊規則 ${specialRules.length} 條`,'info');
+  if(specialRules.length>0){
+    const ids=specialRules.filter(r=>r.type==='ids');
+    const o2=specialRules.filter(r=>r.type==='o2');
+    if(ids.length) toast(`IDS規則：${ids.map(r=>r.name+'第'+r.day+'天').join('、')}`,'info');
+  }
   let publishedShifts={};
   try{const pd=await fbLoadPublishedFull(y,m);publishedShifts=pd?.shifts||{};}catch(e){}
   let staffConfig=[];
