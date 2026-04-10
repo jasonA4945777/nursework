@@ -971,7 +971,13 @@ window.switchTab=el=>{
   if(n==='allReq') renderAllReq();
   if(n==='mySchedule') loadMySchedule();
   if(n==='admin'){ loadShiftAssignGrid(); autoLoadSchedule(); }
-  if(n==='specialRules') loadSpecialRulesPage();
+  if(n==='specialRules'){
+    const admY=document.getElementById('admYear')?.value;
+    const admM=document.getElementById('admMonth')?.value;
+    if(admY){ document.getElementById('srYear').value=admY; }
+    if(admM){ document.getElementById('srMonth').value=admM; }
+    loadSpecialRulesPage();
+  }
   if(n==='staffMgmt') loadStaffMgmtPage();
 };
 function switchTabByName(n){const t=document.querySelector(`[data-page="${n}"]`);if(t)switchTab(t);}
@@ -1262,14 +1268,8 @@ window.generateSchedule=async()=>{
       if(n.realOff.has(d0)) return;
       n.pubOff=n.pubOff||new Set(); n.pubOff.add(d0);
       n.idsDays=n.idsDays||new Set(); n.idsDays.add(d0);
-      // 前一天強制OFF
-      if(d0>0){
-        n.forceOff=n.forceOff||new Set(); n.forceOff.add(d0-1);
-      }
-      // 後一天強制OFF
-      if(d0<dIM-1){
-        n.forceOff=n.forceOff||new Set(); n.forceOff.add(d0+1);
-      }
+      // 前後天強制OFF（排除已是IDS的天，避免連續IDS衝突）
+      // 等所有IDS都收集完再統一處理，這裡先記錄，後面統一套用
     } else if(r.type==='force-work'&&n){
       if(n.realOff.has(d0)) return;
       n.forceWork=n.forceWork||new Set(); n.forceWork.add(d0);
@@ -1324,6 +1324,30 @@ window.generateSchedule=async()=>{
     if(ns>MAX_CONSEC) return false;
     return true;
   }
+
+  // ── IDS 連續天前後OFF統一處理 ──
+  // 只在 IDS 序列的第一天前一天 和 最後一天後一天 設 OFF
+  nurses.forEach(n=>{
+    if(!n.idsDays||n.idsDays.size===0) return;
+    const ids=[...n.idsDays].sort((a,b)=>a-b);
+    // 找連續段的起始和結尾
+    let segStart=ids[0];
+    for(let i=0;i<ids.length;i++){
+      const isLast=i===ids.length-1||ids[i+1]!==ids[i]+1;
+      if(isLast){
+        const segEnd=ids[i];
+        // 段落第一天前一天 OFF
+        if(segStart>0&&!n.idsDays.has(segStart-1)){
+          n.forceOff=n.forceOff||new Set(); n.forceOff.add(segStart-1);
+        }
+        // 段落最後一天後一天 OFF
+        if(segEnd<dIM-1&&!n.idsDays.has(segEnd+1)){
+          n.forceOff=n.forceOff||new Set(); n.forceOff.add(segEnd+1);
+        }
+        if(i<ids.length-1) segStart=ids[i+1];
+      }
+    }
+  });
 
   // ══════════════════════════════════════
   // 主排班循環
