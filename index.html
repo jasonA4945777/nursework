@@ -184,6 +184,7 @@ tbody tr:hover td.col-name{background:#fafbff}
 .cell.N{background:var(--N-bg);color:var(--N)}
 .cell.OFF{color:#c4c7d6;font-weight:400}
 .cell.O2{background:#fce7f3;color:#be185d;font-weight:700}
+.cell.IDS{background:#fff7ed;color:#c2410c;font-weight:700}
 .cell.REQ{outline:2px solid var(--accent);outline-offset:-1px}
 .grp-row td{background:#f8f9ff!important;font-size:10px;font-weight:700;color:var(--text2);letter-spacing:.04em;padding:4px 8px!important}
 .grp-row td.col-name{background:#f8f9ff!important}
@@ -1465,8 +1466,9 @@ function renderSchedTable(y,m,days,sched,all,hmap,pubShifts={},prevStreaks={}){
     gs.forEach(s=>{
       const sc2=sched[s.name];
       const allOffs=all[s.name]||[];
-      const req=allOffs.filter(o=>!/上課|支援|公假|出勤/.test(o.note||'')&&!/02/.test(o.note||'')).map(o=>o.day);
+      const req=allOffs.filter(o=>!/上課|支援|公假|出勤/.test(o.note||'')&&!/02/.test(o.note||'')&&!/IDS|ids/.test(o.note||'')).map(o=>o.day);
       const o2Days=new Set(allOffs.filter(o=>/02/.test(o.note||'')).map(o=>o.day));
+      const idsDays=new Set(allOffs.filter(o=>/IDS|ids/.test(o.note||'')).map(o=>o.day));
       const pubOffDays=new Set(allOffs.filter(o=>/上課|支援|公假|出勤/.test(o.note||'')).map(o=>o.day));
       const tr=document.createElement('tr'); const ps=schedState?.prevStreaks?.[s.name]||0;
       const pl=schedState?.prevStreaks?.[s.name]!=null&&ps>0?(schedState.pubShifts?.[s.name]||s.shift):'';
@@ -1481,15 +1483,16 @@ function renderSchedTable(y,m,days,sched,all,hmap,pubShifts={},prevStreaks={}){
         let tdStyle=we?'background:#f8f9ff':'';
         if(hinfo?.isHoliday) tdStyle='background:#fff8f9';
         else if(hinfo?.isMakeup) tdStyle='background:#fffbeb';
-        // O2 / 公假：算上班，但不計入人力
+        // O2 / IDS / 公假：算上班，但不計入人力
         const isO2=o2Days.has(d);
+        const isIDS=idsDays.has(d);
         const isPubOff=pubOffDays.has(d);
-        const displayV=(isO2||isPubOff)?'O2':(v||'OFF');
+        const displayV=isIDS?'IDS':isO2?'O2':isPubOff?'O2':(v||'OFF');
         const isMidlineCol=HOLIDAY_MIDLINE[m]&&(d+1)===HOLIDAY_MIDLINE[m];
         const tdBorder=isMidlineCol?'box-shadow:inset -3px 0 0 #ef4444;':'';
         html+=`<td style="${tdStyle}${tdBorder}" title="${hinfo?.name||''}"><span class="cell ${displayV}${isR?' REQ':''} editable" data-name="${s.name}" data-day="${d}">${displayV}</span></td>`;
         if(displayV==='OFF') off++;
-        else if(displayV==='O2') wk++; // O2：算上班但不計入人力統計
+        else if(displayV==='O2'||displayV==='IDS') wk++; // O2/IDS：算上班但不計入人力統計
         else{wk++;if(cov[v])cov[v][d]++;}
       }
       // 計算紅字OFF（國定假日+例假日的OFF天數）
@@ -1502,8 +1505,8 @@ function renderSchedTable(y,m,days,sched,all,hmap,pubShifts={},prevStreaks={}){
           if(wd===0||wd===6||hinfo?.isHoliday) holOff++;
         }
       }
-      html+=`<td class="col-st" style="color:#ef4444;font-weight:700" title="國定假日/例假日OFF天數">${holOff}</td>`;
-      html+=`<td class="col-st" style="color:#374151;font-weight:700" title="總OFF天數">${off}</td>`;
+      html+=`<td class="col-st col-holoff" style="color:#ef4444;font-weight:700" title="國定假日/例假日OFF天數">${holOff}</td>`;
+      html+=`<td class="col-st col-totaloff" style="color:#374151;font-weight:700" title="總OFF天數">${off}</td>`;
       tr.innerHTML=html;
       tb.appendChild(tr);
       // Attach click handlers to editable cells
@@ -1830,6 +1833,9 @@ window.exportScheduleExcel = async function(){
   let curRow=3;
 
   // ── 各班 ──
+  // 記錄每個班別的人員列號（用於統計列的 COUNTIF 公式）
+  const shiftRows={D:[],E:[],N:[]};
+
   const groups=[
     {label:'白班 (D)',shift:'D',grp:'GRP_D'},
     {label:'小夜 (E)',shift:'E',grp:'GRP_E'},
@@ -1916,7 +1922,22 @@ window.exportScheduleExcel = async function(){
         if(v==='OFF') offCnt++; else workCnt++;
       }
 
-      // 計算紅字OFF（國定假日+例假日OFF天數）
+      // Excel 公式：用 COUNTIF 計算 OFF 天數
+      // 資料範圍：第 curRow 列，第3欄到第 dIM+2 欄
+      const dataRowRef = curRow;
+      const colStart = String.fromCharCode(67); // C欄（第3欄）
+      // 若欄數超過Z，需用兩個字母，這裡用 ExcelJS 的欄號轉換
+      function colLetter(n){ // 1-based
+        let s='';
+        while(n>0){s=String.fromCharCode(64+(n%26||26))+s;n=Math.floor((n-1)/26);}
+        return s;
+      }
+      const startCol=colLetter(3); // C
+      const endCol=colLetter(dIM+2);
+      const rangeRef=`${startCol}${dataRowRef}:${endCol}${dataRowRef}`;
+
+      // 紅字OFF：假日+週末的 OFF 天數（直接計算，因需要判斷哪些欄是假日）
+      // 先用數值，未來可改進
       let holOffXlsx=0;
       for(let d=0;d<dIM;d++){
         const v=r[d]||'OFF';
@@ -1926,10 +1947,14 @@ window.exportScheduleExcel = async function(){
         }
       }
       const holOffCell=ws.getCell(curRow,dIM+3);
-      holOffCell.value=holOffXlsx; holOffCell.font=font(8,true,'ef4444');
+      holOffCell.value=holOffXlsx;
+      holOffCell.font=font(8,true,'ef4444');
       holOffCell.alignment=align(); holOffCell.border=border();
+
+      // 總OFF：COUNTIF 公式
       const totalOffCell=ws.getCell(curRow,dIM+4);
-      totalOffCell.value=offCnt; totalOffCell.font=font(8,true,'374151');
+      totalOffCell.value={formula:`COUNTIF(${rangeRef},"OFF")`};
+      totalOffCell.font=font(8,true,'374151');
       totalOffCell.alignment=align(); totalOffCell.border=border();
 
       curRow++;
@@ -1955,7 +1980,16 @@ window.exportScheduleExcel = async function(){
       const isMid=midlineCol!==null&&d===midlineCol;
       const isLow=cnt<minT;
       const cell=ws.getCell(curRow,d+3);
-      cell.value=cnt;
+      const colRef=colLetter(d+3);
+      // 用 COUNTIF 公式：加總該班所有人員列中該欄等於班別代碼的數量
+      const rows=shiftRows[sh]||[];
+      if(rows.length>0){
+        // COUNTIF(C5,"D")+COUNTIF(C6,"D")+... 的形式
+        const formula=rows.map(r=>`COUNTIF(${colRef}${r},"${sh}")`).join('+');
+        cell.value={formula};
+      } else {
+        cell.value=cnt;
+      }
       cell.fill=fill(isLow?C.STAT_LOW:C.STAT_OK);
       cell.font=font(8,true,isLow?C.STAT_LOW_FG:'333333');
       cell.alignment=align();
@@ -2313,7 +2347,7 @@ function calcStreakAfterEdit(name, day0, newVal){
   let last=pl, streak=ps;
   const streaks=[];
   for(let d=0;d<A.length;d++){
-    const av2=A[d]==='O2'?'D':A[d]; // O2 算上班（當D計算連班）
+    const av2=(A[d]==='O2'||A[d]==='IDS')?'D':A[d]; // O2/IDS 算上班（當D計算連班）
     if(!av2||av2==='OFF'){last='OFF';streak=0;}
     else{streak=last==='OFF'?1:streak+1; last=av2;}
     streaks.push(streak);
@@ -2364,13 +2398,25 @@ window.undoEdit = function(){
   // 更新上班/OFF統計
   const r=schedState.sched[name];
   const wk=r.filter(v=>v&&v!=='OFF').length;
-  const off=r.filter(v=>v==='OFF').length;
+  const off=r.filter(v=>!v||v==='OFF').length;
   const tr=cellEl?.closest('tr');
   if(tr){
-    const wkEl=tr.querySelector('.col-wk');
-    const offEl=tr.querySelector('.col-off');
-    if(wkEl) wkEl.textContent=wk;
-    if(offEl) offEl.textContent=off;
+    const totalOffEl=tr.querySelector('.col-totaloff');
+    const holOffEl=tr.querySelector('.col-holoff');
+    if(totalOffEl) totalOffEl.textContent=off;
+    if(holOffEl){
+      let holOff=0;
+      const {y,m,days,hmap}=schedState;
+      for(let d=0;d<days;d++){
+        const v=r[d]||'OFF';
+        if(!v||v==='OFF'){
+          const dt=new Date(y,m-1,d+1),wd=dt.getDay();
+          const key=`${y}-${String(m).padStart(2,'0')}-${String(d+1).padStart(2,'0')}`;
+          if(wd===0||wd===6||hmap?.[key]?.isHoliday) holOff++;
+        }
+      }
+      holOffEl.textContent=holOff;
+    }
   }
   refreshCovRow(schedState);
   updateUndoBtn();
@@ -2431,9 +2477,30 @@ function _doApplyEdit(name, day0, newVal, cellEl, wkEl, offEl){
   cellEl.textContent = newVal;
   const r = schedState.sched[name];
   const wk = r.filter(v=>v&&v!=='OFF').length;
-  const off = r.filter(v=>v==='OFF').length;
+  const off = r.filter(v=>!v||v==='OFF').length;
   if(wkEl) wkEl.textContent = wk;
   if(offEl) offEl.textContent = off;
+  // 更新紅字OFF和總OFF欄
+  const tr2 = cellEl?.closest('tr');
+  if(tr2){
+    const holOffEl=tr2.querySelector('.col-holoff');
+    const totalOffEl=tr2.querySelector('.col-totaloff');
+    if(totalOffEl) totalOffEl.textContent=off;
+    if(holOffEl){
+      // 重新計算紅字OFF
+      let holOff=0;
+      const {y,m,days,hmap}=schedState;
+      for(let d=0;d<days;d++){
+        const v=r[d]||'OFF';
+        if(!v||v==='OFF'){
+          const dt=new Date(y,m-1,d+1),wd=dt.getDay();
+          const key=`${y}-${String(m).padStart(2,'0')}-${String(d+1).padStart(2,'0')}`;
+          if(wd===0||wd===6||hmap?.[key]?.isHoliday) holOff++;
+        }
+      }
+      holOffEl.textContent=holOff;
+    }
+  }
   refreshCovRow(schedState);
   toast(`${name} ${schedState.m}/${day0+1} 改為 ${newVal}`,'success');
 };
@@ -2576,13 +2643,25 @@ window.applySuggest = function(name, day0, sh){
   // 更新統計
   const r=schedState.sched[name];
   const wk=r.filter(v=>v&&v!=='OFF').length;
-  const off=r.filter(v=>v==='OFF').length;
+  const off=r.filter(v=>!v||v==='OFF').length;
   const tr=cellEl?.closest('tr');
   if(tr){
-    const wkEl=tr.querySelector('.col-wk');
-    const offEl=tr.querySelector('.col-off');
-    if(wkEl) wkEl.textContent=wk;
-    if(offEl) offEl.textContent=off;
+    const totalOffEl=tr.querySelector('.col-totaloff');
+    const holOffEl=tr.querySelector('.col-holoff');
+    if(totalOffEl) totalOffEl.textContent=off;
+    if(holOffEl){
+      let holOff=0;
+      const {y,m,days,hmap}=schedState;
+      for(let d=0;d<days;d++){
+        const v=r[d]||'OFF';
+        if(!v||v==='OFF'){
+          const dt=new Date(y,m-1,d+1),wd=dt.getDay();
+          const key=`${y}-${String(m).padStart(2,'0')}-${String(d+1).padStart(2,'0')}`;
+          if(wd===0||wd===6||hmap?.[key]?.isHoliday) holOff++;
+        }
+      }
+      holOffEl.textContent=holOff;
+    }
   }
   refreshCovRow(schedState);
   document.getElementById('suggestModal').classList.remove('show');
