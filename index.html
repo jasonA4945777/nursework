@@ -1228,7 +1228,17 @@ window.generateSchedule=async()=>{
     if(!r.day) return;
     const d0=Number(r.day)-1; if(d0<0||d0>=dIM) return;
     const n=nurses.find(x=>x.name===r.name);
-    if(r.type==='force-work'&&n){
+    if(r.type==='o2'&&n){
+      // O2：算上班，不算OFF，不計入人力，顯示粉紅色
+      if(n.realOff.has(d0)) return;
+      n.pubOff=n.pubOff||new Set(); n.pubOff.add(d0);
+      n.o2Days=n.o2Days||new Set(); n.o2Days.add(d0);
+    } else if(r.type==='ids'&&n){
+      // IDS：算上班，不算OFF，不計入人力，顯示橘色
+      if(n.realOff.has(d0)) return;
+      n.pubOff=n.pubOff||new Set(); n.pubOff.add(d0);
+      n.idsDays=n.idsDays||new Set(); n.idsDays.add(d0);
+    } else if(r.type==='force-work'&&n){
       if(n.realOff.has(d0)) return;
       n.forceWork=n.forceWork||new Set(); n.forceWork.add(d0);
     } else if(r.type==='force-off'&&n){
@@ -1399,7 +1409,12 @@ window.generateSchedule=async()=>{
   // 輸出
   // ══════════════════════════════════════
   const sched={};
-  nurses.forEach(n=>{sched[n.name]=n.A;});
+  nurses.forEach(n=>{
+    const arr=[...n.A];
+    if(n.o2Days) n.o2Days.forEach(d=>{ if(arr[d]&&arr[d]!=='OFF') arr[d]='O2'; });
+    if(n.idsDays) n.idsDays.forEach(d=>{ if(arr[d]&&arr[d]!=='OFF') arr[d]='IDS'; });
+    sched[n.name]=arr;
+  });
 
   // 統計 OFF 天數
   const offSummary=nurses.map(n=>`${n.name}:${n.offCnt}`);
@@ -2806,6 +2821,8 @@ function renderSpecialRulesPage(){
     'force-off':  {label:'🔴 強制OFF',  cls:'sr-type-force-off'},
     'change-shift':{label:'🟡 改換班別', cls:'sr-type-change-shift'},
     'day-req':    {label:'🟣 當日人力', cls:'sr-type-day-req'},
+    'o2':         {label:'🩷 O2 特殊任務', cls:'sr-type-force-work'},
+    'ids':        {label:'🟠 IDS 支援', cls:'sr-type-change-shift'},
   };
 
   list.innerHTML = specialRules.map(r => {
