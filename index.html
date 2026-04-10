@@ -1258,18 +1258,13 @@ window.generateSchedule=async()=>{
     const d0=Number(r.day)-1; if(d0<0||d0>=dIM) return;
     const n=nurses.find(x=>x.name===r.name);
     if(r.type==='o2'&&n){
-      // O2：算上班，不算OFF，不計入人力，顯示粉紅色
-      if(n.realOff.has(d0)) return;
+      // O2：算上班，不算OFF，不計入人力，顯示粉紅色（可覆蓋預假）
       n.pubOff=n.pubOff||new Set(); n.pubOff.add(d0);
       n.o2Days=n.o2Days||new Set(); n.o2Days.add(d0);
     } else if(r.type==='ids'&&n){
-      // IDS：算上班，不算OFF，不計入人力，顯示橘色
-      // 前一天和後一天強制 OFF
-      if(n.realOff.has(d0)) return;
+      // IDS：可覆蓋預假，算上班，不計入人力
       n.pubOff=n.pubOff||new Set(); n.pubOff.add(d0);
       n.idsDays=n.idsDays||new Set(); n.idsDays.add(d0);
-      // 前後天強制OFF（排除已是IDS的天，避免連續IDS衝突）
-      // 等所有IDS都收集完再統一處理，這裡先記錄，後面統一套用
     } else if(r.type==='force-work'&&n){
       if(n.realOff.has(d0)) return;
       n.forceWork=n.forceWork||new Set(); n.forceWork.add(d0);
@@ -1357,9 +1352,12 @@ window.generateSchedule=async()=>{
     // ── Step1：強制鎖定 ──
     nurses.forEach(n=>{
       if(n.A[d0]!==null) return;
-      if(n.realOff.has(d0)){set(n,d0,'OFF');return;}
       if(n.ia!==null&&d0>=n.ia){set(n,d0,'OFF');return;}
-      // pubOff（含IDS/O2）優先於forceOff，確保IDS那天一定排上班
+      // IDS/O2（特殊任務）優先順序最高，可覆蓋預假
+      if(n.idsDays?.has(d0)||n.o2Days?.has(d0)){
+        set(n,d0,n.allowed[0]); return;
+      }
+      if(n.realOff.has(d0)){set(n,d0,'OFF');return;}
       if(n.pubOff.has(d0)){set(n,d0,n.allowed[0]);return;}
       if(n.forceOff?.has(d0)){set(n,d0,'OFF');return;}
       if(n.tempShift?.[d0]){set(n,d0,n.tempShift[d0]);return;}
