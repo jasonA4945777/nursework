@@ -1517,13 +1517,24 @@ window.generateSchedule=async()=>{
   });
 
   // 統計 OFF 天數
-  // Debug：用 alert 確保看到
+  // Debug：詳細顯示每天的排班原因
   {
     const lines=[];
     ['曹育慈','陳安琪'].forEach(name=>{
       const n=nurses.find(x=>x.name===name);
       if(!n){lines.push(name+': 找不到');return;}
-      lines.push(`${name}: 目標OFF=${n.myGoal} 實際OFF=${n.offCnt} 預假=${n.realOff.size} pubOff=${n.pubOff.size} ia=${n.ia}`);
+      // 統計各類 OFF 天數
+      let realOffCnt=0, forceOffCnt=0, otherOffCnt=0;
+      for(let d=0;d<dIM;d++){
+        if(n.A[d]==='OFF'){
+          if(n.realOff.has(d)) realOffCnt++;
+          else if(n.forceOff?.has(d)) forceOffCnt++;
+          else otherOffCnt++;
+        }
+      }
+      lines.push(`${name}: 目標=${n.myGoal} 總OFF=${n.offCnt}`);
+      lines.push(`  預假OFF=${realOffCnt} 強制OFF=${forceOffCnt} 其他OFF=${otherOffCnt}`);
+      lines.push(`  realOff天=${[...n.realOff].map(d=>d+1).join(',')} forceOff天=${[...(n.forceOff||[])].map(d=>d+1).join(',')}`);
     });
     alert('Debug\n'+lines.join('\n'));
   }
