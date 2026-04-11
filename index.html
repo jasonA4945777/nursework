@@ -1306,8 +1306,10 @@ window.generateSchedule=async()=>{
 
   // OFF 緊迫度：今天之後還需要休幾天 / 還有幾天可以休
   function urgency(n,d0){
-    const realLeft=[...n.realOff].filter(d=>d>d0).length;
-    const offStillNeeded=Math.max(0,n.myGoal-n.offCnt-realLeft-n.iaOffs);
+    // 計算從今天起，還需要排幾天 OFF（不含已確定的預假）
+    // realOff 的天引擎會在 Step1 自動排 OFF，不需要納入urgency計算
+    const offStillNeeded=Math.max(0,n.myGoal-n.offCnt-n.iaOffs);
+    // 計算從今天起還有幾天可以自由排（排除預假和停班天）
     let freeLeft=0;
     for(let d=d0;d<dIM;d++){
       if(!n.realOff.has(d)&&(n.ia===null||d<n.ia)) freeLeft++;
@@ -1413,8 +1415,7 @@ window.generateSchedule=async()=>{
       if(n.A[d0]!==null) return;
       if(n.ia!==null&&d0>=n.ia) return;
       const remain=dIM-d0;
-      const realLeft=[...n.realOff].filter(d=>d>d0).length;
-      const offStillNeeded=Math.max(0,n.myGoal-n.offCnt-realLeft-n.iaOffs);
+      const offStillNeeded=Math.max(0,n.myGoal-n.offCnt-n.iaOffs);
       if(remain>offStillNeeded) return; // 還來得及，不強制
       const sh=n.allowed[0];
       const req=dayReqMap[`${d0}_${sh}`]||{};
