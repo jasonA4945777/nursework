@@ -1461,35 +1461,33 @@ window.generateSchedule=async()=>{
       const cv=getCov(d0);
       const cur=cv[sh]||0;
 
-      // 超過上限 → OFF
-      if(cur>=maxT){set(n,d0,'OFF');return;}
-
-      // urgency 決策：
-      const urg=urgency(n,d0);
-      const remain=dIM-d0;
-      const realLeft=[...n.realOff].filter(d=>d>d0).length;
-      const offStillNeeded=Math.max(0,n.myGoal-n.offCnt-realLeft-n.iaOffs);
-
-      // 強制OFF條件1：剩餘天數不夠補足OFF → 今天必須休（保證OFF下限）
-      if(remain<=offStillNeeded){
-        // 但如果今天上班人力剛好在最低標準，不能休（人力優先）
-        if(cur<=minT){
-          // 兩難：需要休但人力不夠
-          // 解法：今天上班，但把 offStillNeeded 記錄下來，系統會在之後天數補回
-          set(n,d0,sh); return;
-        }
-        set(n,d0,'OFF'); return;
+      // 超過上限 → OFF（但需檢查 OFF 是否已達目標）
+      if(cur>=maxT){
+        if(canSetOff(n,d0)) set(n,d0,'OFF');
+        else set(n,d0,sh); // OFF已達目標，強制上班
+        return;
       }
 
-      // 強制OFF條件2：urgency高 且 人數 > minT（有餘裕）→ 今天休
-      // 人數必須 > minT 才允許休，確保最低人力
-      if(urg>=0.5&&cur>minT){set(n,d0,'OFF');return;}
+      // urgency 決策（不再用 realLeft 扣除）：
+      const urg=urgency(n,d0);
+      const remain=dIM-d0;
+      const offStillNeeded=Math.max(0,n.myGoal-n.offCnt-n.iaOffs);
 
-      // 人數剛好在 minT：不管urgency多高，今天上班
+      // 強制OFF條件1：剩餘天數不夠補足OFF → 今天必須休
+      if(remain<=offStillNeeded){
+        if(cur<=minT){ set(n,d0,sh); return; } // 人力不夠，上班
+        if(canSetOff(n,d0)){ set(n,d0,'OFF'); return; }
+        set(n,d0,sh); return;
+      }
+
+      // 強制OFF條件2：urgency高 且 人數 > minT 且 OFF未達目標
+      if(urg>=0.5&&cur>minT&&canSetOff(n,d0)){set(n,d0,'OFF');return;}
+
+      // 人數剛好在 minT：今天上班
       if(cur<=minT){set(n,d0,sh);return;}
 
-      // 人數在 minT~maxT 之間：看urgency決定
-      if(urg>=0.7){set(n,d0,'OFF');return;}
+      // 人數在 minT~maxT 之間：urgency決定，但需檢查 OFF 目標
+      if(urg>=0.7&&canSetOff(n,d0)){set(n,d0,'OFF');return;}
 
       // 否則上班
       set(n,d0,sh);
