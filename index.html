@@ -1158,12 +1158,14 @@ window.generateSchedule=async()=>{
   loader(false);
 
   await loadSpecialRules(y,m);
-  // 明確顯示載入的特殊規則數量和年月
-  toast(`排班月份：${y}年${m}月，載入特殊規則 ${specialRules.length} 條`,'info');
+  // Debug：顯示所有規則的 type 值
+  toast(`排班月份：${y}年${m}月，特殊規則 ${specialRules.length} 條`,'info');
   if(specialRules.length>0){
+    const types=[...new Set(specialRules.map(r=>r.type))].join('、');
+    toast(`規則類型：${types}`,'info');
     const ids=specialRules.filter(r=>r.type==='ids');
-    const o2=specialRules.filter(r=>r.type==='o2');
-    if(ids.length) toast(`IDS規則：${ids.map(r=>r.name+'第'+r.day+'天').join('、')}`,'info');
+    if(ids.length) toast(`IDS：${ids.map(r=>r.name+'第'+r.day+'天').join('、')}`,'success');
+    else toast(`無IDS規則（所有type：${specialRules.map(r=>r.type).join(',')}）`,'warn');
   }
   let publishedShifts={};
   try{const pd=await fbLoadPublishedFull(y,m);publishedShifts=pd?.shifts||{};}catch(e){}
@@ -1556,6 +1558,13 @@ function renderSchedTable(y,m,days,sched,all,hmap,pubShifts={},prevStreaks={}){
       const o2Days=new Set(allOffs.filter(o=>/02/.test(o.note||'')).map(o=>o.day));
       const idsDays=new Set(allOffs.filter(o=>/IDS|ids/.test(o.note||'')).map(o=>o.day));
       const pubOffDays=new Set(allOffs.filter(o=>/上課|支援|公假|出勤/.test(o.note||'')).map(o=>o.day));
+      // 從特殊規則補入 IDS/O2 天（特殊規則方式設定的）
+      specialRules.forEach(r=>{
+        if(!r.name||r.name!==s.name||!r.day) return;
+        const rd=Number(r.day)-1;
+        if(r.type==='ids') idsDays.add(rd);
+        else if(r.type==='o2') o2Days.add(rd);
+      });
       const tr=document.createElement('tr'); const ps=schedState?.prevStreaks?.[s.name]||0;
       const pl=schedState?.prevStreaks?.[s.name]!=null&&ps>0?(schedState.pubShifts?.[s.name]||s.shift):'';
       const plLabel=Array.isArray(pl)?pl[0]:pl;
