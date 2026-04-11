@@ -1505,6 +1505,14 @@ window.generateSchedule=async()=>{
   });
 
   // 統計 OFF 天數
+  // Debug：輸出問題人員的詳細資訊
+  ['曹育慈','陳安琪'].forEach(name=>{
+    const n=nurses.find(x=>x.name===name);
+    if(!n) return;
+    const realOffCount=[...n.realOff].length;
+    const pubOffCount=[...n.pubOff].length;
+    toast(`${name}：目標OFF=${n.myGoal} 實際OFF=${n.offCnt} 預假=${realOffCount} 公假=${pubOffCount} ia=${n.ia}`,'warn');
+  });
   const offSummary=nurses.map(n=>`${n.name}:${n.offCnt}`);
   const minOff=Math.min(...nurses.filter(n=>!n.ia).map(n=>n.offCnt));
   const maxOff=Math.max(...nurses.filter(n=>!n.ia).map(n=>n.offCnt));
