@@ -1351,6 +1351,21 @@ window.generateSchedule=async()=>{
         if(i<ids.length-1) segStart=ids[i+1];
       }
     }
+    // IDS 的前後 forceOff 加入 myGoal（只算 IDS 造成的，不含其他 force-off）
+    if(n.idsDays&&n.idsDays.size>0){
+      const ids=[...n.idsDays].sort((a,b)=>a-b);
+      let idsExtraOff=0;
+      let seg=ids[0];
+      for(let i=0;i<ids.length;i++){
+        const isLast=i===ids.length-1||ids[i+1]!==ids[i]+1;
+        if(isLast){
+          if(seg>0&&!n.idsDays.has(seg-1)) idsExtraOff++; // 段落前一天
+          if(ids[i]<dIM-1&&!n.idsDays.has(ids[i]+1)) idsExtraOff++; // 段落後一天
+          if(i<ids.length-1) seg=ids[i+1];
+        }
+      }
+      n.myGoal=n.myGoal+idsExtraOff;
+    }
   });
 
   // ══════════════════════════════════════
