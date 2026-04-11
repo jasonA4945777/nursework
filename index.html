@@ -1506,14 +1506,23 @@ window.generateSchedule=async()=>{
   });
 
   // 統計 OFF 天數
-  // Debug：輸出問題人員的詳細資訊
-  ['曹育慈','陳安琪'].forEach(name=>{
-    const n=nurses.find(x=>x.name===name);
-    if(!n) return;
-    const realOffCount=[...n.realOff].length;
-    const pubOffCount=[...n.pubOff].length;
-    toast(`${name}：目標OFF=${n.myGoal} 實際OFF=${n.offCnt} 預假=${realOffCount} 公假=${pubOffCount} ia=${n.ia}`,'warn');
-  });
+  // Debug：固定顯示在班表上方
+  {
+    let debugMsg='';
+    ['曹育慈','陳安琪'].forEach(name=>{
+      const n=nurses.find(x=>x.name===name);
+      if(!n) return;
+      debugMsg+=`${name}：目標OFF=${n.myGoal} 實際OFF=${n.offCnt} 預假=${n.realOff.size} 公假=${n.pubOff.size} ia=${n.ia}<br>`;
+    });
+    if(debugMsg){
+      const dbg=document.createElement('div');
+      dbg.id='debugBox';
+      dbg.style.cssText='background:#fef9c3;border:2px solid #eab308;border-radius:10px;padding:12px 16px;margin-bottom:12px;font-size:13px;color:#713f12;line-height:1.8';
+      dbg.innerHTML='🔍 Debug：<br>'+debugMsg;
+      const out=document.getElementById('schedOut');
+      if(out) out.prepend(dbg);
+    }
+  }
   const offSummary=nurses.map(n=>`${n.name}:${n.offCnt}`);
   const minOff=Math.min(...nurses.filter(n=>!n.ia).map(n=>n.offCnt));
   const maxOff=Math.max(...nurses.filter(n=>!n.ia).map(n=>n.offCnt));
