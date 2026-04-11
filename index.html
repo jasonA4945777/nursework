@@ -1298,6 +1298,13 @@ window.generateSchedule=async()=>{
     if(v==='OFF'){n.offCnt++;n.last='OFF';n.streak=0;}
     else{n.workCnt++;n.streak=n.last==='OFF'?1:n.streak+1;n.last=v;}
   }
+  // OFF 上限保護：非預假/強制天，不能超過 myGoal
+  function canSetOff(n,d0){
+    if(n.realOff.has(d0)) return true;  // 預假一定可以OFF
+    if(n.forceOff?.has(d0)) return true; // 強制OFF一定可以OFF
+    if(n.ia!==null&&d0>=n.ia) return true; // 停班一定可以OFF
+    return n.offCnt < n.myGoal; // 其他情況不能超過目標
+  }
   function getCov(d0){
     const c={D:0,E:0,N:0};
     nurses.forEach(n=>{const v=n.A[d0];if(v&&v!=='OFF')c[v]=(c[v]||0)+1;});
@@ -1398,9 +1405,8 @@ window.generateSchedule=async()=>{
     nurses.forEach(n=>{
       if(n.A[d0]!==null) return;
       const ns=n.last==='OFF'?1:n.streak+1;
-      if(ns>MAX_CONSEC){set(n,d0,'OFF');return;}
+      if(ns>MAX_CONSEC){set(n,d0,'OFF');return;} // 連班超限必須OFF（硬規則）
       if(n.last==='N'&&n.allowed.length===1&&n.allowed[0]==='E'){set(n,d0,'OFF');return;}
-      // E→D 和 N→D 需要OFF間隔
       const sh0=n.allowed[0];
       if(sh0==='D'&&(n.last==='E'||n.last==='N')){set(n,d0,'OFF');return;}
     });
@@ -1422,6 +1428,7 @@ window.generateSchedule=async()=>{
       const minT=req.min??(sh==='D'?MIN_D:sh==='E'?MIN_E:N_COUNT);
       const cv=getCov(d0);
       if((cv[sh]||0)<=minT) return; // 人力不夠，今天不強制OFF
+      if(!canSetOff(n,d0)) return; // OFF已達目標，不再強制
       set(n,d0,'OFF');
     });
 
@@ -1441,7 +1448,11 @@ window.generateSchedule=async()=>{
     undecided.forEach(n=>{
       if(n.ia!==null&&d0>=n.ia){set(n,d0,'OFF');return;}
       const sh=n.allowed[0];
-      if(!canWork(n,d0,sh)){set(n,d0,'OFF');return;}
+      if(!canWork(n,d0,sh)){
+        if(canSetOff(n,d0)) set(n,d0,'OFF');
+        else set(n,d0,sh); // 無法上班但已達OFF上限，強制排班（避免空格）
+        return;
+      }
 
       const req=dayReqMap[`${d0}_${sh}`]||{};
       const maxT=req.max??(sh==='D'?MAX_D:sh==='E'?MAX_E:N_COUNT);
