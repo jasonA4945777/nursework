@@ -660,29 +660,8 @@ async function fbLoadAll(y,m){ const res={}; STAFF.forEach(s=>res[s.name]=[]); c
 // 來源：data.gov.tw 行政院人事行政總處
 async function fetchHolidays(year) {
   if (holidayCache[year]) return holidayCache[year];
-  const map = {};
-  try {
-    // 使用 data.gov.tw API
-    const url = `https://data.gov.tw/api/v2/rest/datastore/472d7e3e-5e98-4a26-9061-ee0041bd1f5a?filters=year%3D${year}&limit=400&offset=0`;
-    const res = await fetch(url);
-    const json = await res.json();
-    const records = json?.result?.records || [];
-    records.forEach(r => {
-      // 欄位：date, name, isHoliday
-      if (!r.date) return;
-      const dateStr = r.date.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3');
-      const isHoliday = r.isHoliday === 'Y' || r['isHoliday'] === 'Y';
-      const isMakeup = !isHoliday && r.name && r.name.includes('補班');
-      if (r.name) {
-        map[dateStr] = { name: r.name, isHoliday, isMakeup };
-      }
-    });
-  } catch(e) {
-    // 若抓取失敗，使用內建常見假日備援
-    console.warn('假日API抓取失敗，使用備援資料', e);
-    const fallback = getBuiltinHolidays(year);
-    Object.assign(map, fallback);
-  }
+  // 直接使用內建假日資料（避免 CORS 問題）
+  const map = getBuiltinHolidays(year);
   holidayCache[year] = map;
   return map;
 }
@@ -1520,10 +1499,22 @@ window.generateSchedule=async()=>{
           return;
         }
 
-        // 剩餘天數不夠補足OFF → 今天必須休
+        // 剩餘天數不夠補足OFF → 今天必須休（最高優先）
         if(remain<=offStillNeeded){
           if(canSetOff(n,d0)){set(n,d0,'OFF');return;}
           set(n,d0,sh);return;
+        }
+
+        // 緊急補OFF：剩餘非預假天扣掉必須上班天後，OFF恰好夠用 → 今天必須休
+        // 計算剩餘自由天（排除已確定的預假天）
+        let freeRemain=0;
+        for(let fd=d0;fd<dIM;fd++){
+          if(n.realOff.has(fd)||n.ia!==null&&fd>=n.ia) continue;
+          freeRemain++;
+        }
+        // 如果自由天數剛好等於還需要的OFF天數 → 今天必須OFF
+        if(freeRemain<=offStillNeeded&&canSetOff(n,d0)&&cur>minT){
+          set(n,d0,'OFF');return;
         }
 
         // 今天是理想OFF天 或 連班>=5天 → 休（人力許可且未達目標）
@@ -1564,6 +1555,29 @@ window.generateSchedule=async()=>{
     n.A=bestResult.A[i];
     n.offCnt=n.A.filter(v=>!v||v==='OFF').length;
     n.workCnt=n.A.filter(v=>v&&v!=='OFF').length;
+  });
+
+  // 兜底：對 OFF 天數不足的人，在不違反人力下限的天補 OFF
+  nurses.forEach(n=>{
+    if(n.offCnt>=n.myGoal) return;
+    const need=n.myGoal-n.offCnt;
+    let fixed=0;
+    for(let d=0;d<dIM&&fixed<need;d++){
+      if(n.A[d]==='OFF'||n.realOff.has(d)||n.ia!==null&&d>=n.ia) continue;
+      if(n.idsDays?.has(d)||n.o2Days?.has(d)||n.pubOff.has(d)) continue;
+      // 確認改成OFF後人力仍在下限以上
+      const sh=n.A[d];
+      if(!sh) continue;
+      const req=dayReqMap[`${d}_${sh}`]||{};
+      const minT2=req.min??(sh==='D'?MIN_D:sh==='E'?MIN_E:N_COUNT);
+      const cv2=getCov(d);
+      if((cv2[sh]||0)<=minT2) continue; // 人力不足，不能改OFF
+      // 確認沒有連班切換問題（改 OFF 後前後連班是否合法）
+      n.A[d]='OFF';
+      n.offCnt++;
+      n.workCnt--;
+      fixed++;
+    }
   });
 
 
