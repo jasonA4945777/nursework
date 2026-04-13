@@ -1158,15 +1158,7 @@ window.generateSchedule=async()=>{
   loader(false);
 
   await loadSpecialRules(y,m);
-  // Debug：顯示所有規則的 type 值
-  toast(`排班月份：${y}年${m}月，特殊規則 ${specialRules.length} 條`,'info');
-  if(specialRules.length>0){
-    const types=[...new Set(specialRules.map(r=>r.type))].join('、');
-    toast(`規則類型：${types}`,'info');
-    const ids=specialRules.filter(r=>r.type==='ids');
-    if(ids.length) toast(`IDS：${ids.map(r=>r.name+'第'+r.day+'天').join('、')}`,'success');
-    else toast(`無IDS規則（所有type：${specialRules.map(r=>r.type).join(',')}）`,'warn');
-  }
+
   let publishedShifts={};
   try{const pd=await fbLoadPublishedFull(y,m);publishedShifts=pd?.shifts||{};}catch(e){}
   let staffConfig=[];
@@ -1420,6 +1412,13 @@ window.generateSchedule=async()=>{
         freeDays.push(d);
       }
 
+      // E班週六優先加入候選（週六只需4人，剩餘1人更容易休）
+      if(!n.isN && n.allowed.includes('E')){
+        freeDays.forEach(d=>{
+          if(new Date(y,m-1,d+1).getDay()===6) freeDays.push(d); // 週六權重加倍
+        });
+      }
+
       // 引擎需要安排的 OFF 天數
       const fixedOff = n.realOff.size + (n.forceOff?.size||0) + n.iaOffs;
       const engineOff = Math.max(0, n.myGoal - fixedOff);
@@ -1503,7 +1502,8 @@ window.generateSchedule=async()=>{
         }
 
         const req=dayReqMap[`${d0}_${sh}`]||{};
-        const maxT=req.max??(sh==='D'?MAX_D:sh==='E'?MAX_E:N_COUNT);
+        const isSat=new Date(y,m-1,d0+1).getDay()===6;
+        const maxT=req.max??(sh==='D'?MAX_D:sh==='E'?(isSat?4:MAX_E):N_COUNT);
         const minT=req.min??(sh==='D'?MIN_D:sh==='E'?MIN_E:N_COUNT);
         const cv=getCov(d0);
         const cur=cv[sh]||0;
