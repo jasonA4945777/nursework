@@ -1212,7 +1212,9 @@ window.generateSchedule=async()=>{
     });
 
     const iaOffs=ia!==null?Math.max(0,dIM-ia):0;
-    const myGoal=isN?OFF_GOAL+1:OFF_GOAL;
+    // N班：目標取 OFF_GOAL 和 8 的最大值（確保至少8天但不超過正常計算）
+    const nGoal=Math.min(OFF_GOAL+1, Math.max(8, OFF_GOAL-1));
+    const myGoal=isN?nGoal:OFF_GOAL;
 
     // 上個月連班
     const ps=prevStreaks[s.name]||0;
@@ -1635,7 +1637,8 @@ window.generateSchedule=async()=>{
 
   // ── 排班品質檢查（輸出到 Console）──
   console.group('%c📋 排班品質檢查報告', 'font-size:14px;font-weight:bold;color:#2563eb');
-  console.log(`📅 ${y}年${m}月（${dIM}天）｜ 人數:${nurses.length}人 ｜ OFF目標:${OFF_GOAL}天（N班:${OFF_GOAL+1}天）`);
+  const nGoalDisplay=Math.min(OFF_GOAL+1, Math.max(8, OFF_GOAL-1));
+  console.log(`📅 ${y}年${m}月（${dIM}天）｜ 人數:${nurses.length}人 ｜ OFF目標:${OFF_GOAL}天（N班:${nGoalDisplay}天）`);
   console.log('');
 
   // 1. 各人 OFF 天數檢查
