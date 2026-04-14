@@ -1632,6 +1632,96 @@ window.generateSchedule=async()=>{
   toast(`排班完成 ｜ OFF目標:${OFF_GOAL}天 ｜ 實際範圍:${minOff}~${maxOff}天`,'success');
 
   renderSchedTable(y,m,dIM,sched,all,hmap,publishedShifts,prevStreaks);
+
+  // ── 排班品質檢查（輸出到 Console）──
+  console.group('%c📋 排班品質檢查報告', 'font-size:14px;font-weight:bold;color:#2563eb');
+  console.log(`📅 ${y}年${m}月（${dIM}天）｜ 人數:${nurses.length}人 ｜ OFF目標:${OFF_GOAL}天（N班:${OFF_GOAL+1}天）`);
+  console.log('');
+
+  // 1. 各人 OFF 天數檢查
+  console.group('1️⃣ 各人 OFF 天數');
+  let offOK=true;
+  nurses.forEach(n=>{
+    const goal=n.myGoal;
+    const actual=n.offCnt;
+    const diff=actual-goal;
+    const realOffCount=n.realOff.size;
+    const status=actual===goal?'✅':actual>goal?'🔴 超過':'🟡 不足';
+    const style=actual===goal?'color:green':actual>goal?'color:red':'color:orange';
+    console.log(`%c${status} ${n.name}（${n.isN?'N班':'D/E班'}）：目標=${goal} 實際=${actual}（${diff>0?'+':''}${diff}）預假=${realOffCount}天`,style);
+    if(actual!==goal) offOK=false;
+  });
+  if(offOK) console.log('%c✅ 所有人 OFF 天數正確！','color:green;font-weight:bold');
+  console.groupEnd();
+  console.log('');
+
+  // 2. 連班天數檢查
+  console.group('2️⃣ 連班天數檢查（超過4天）');
+  let maxStreakOK=true;
+  nurses.forEach(n=>{
+    let streak=0, maxS=0, violations=[];
+    let prev=n.prevStreaks?.[n.name]||0;
+    // 考慮上月連班
+    let curStreak=prevStreaks[n.name]||0;
+    for(let d=0;d<dIM;d++){
+      const v=sched[n.name]?.[d];
+      if(!v||v==='OFF'){curStreak=0;}
+      else{curStreak++; if(curStreak>maxS) maxS=curStreak; if(curStreak>6) violations.push(`第${d+1}天(連${curStreak}天)`);}
+    }
+    if(maxS>=5){
+      const style=maxS>6?'color:red':maxS>=5?'color:orange':'color:green';
+      console.log(`%c${maxS>6?'🔴':'⚠️'} ${n.name}：最長連班=${maxS}天 ${violations.length?'違規:'+violations.join(','):''}`,style);
+      if(maxS>6) maxStreakOK=false;
+    }
+  });
+  if(maxStreakOK) console.log('%c✅ 無連班超過6天的情況','color:green;font-weight:bold');
+  console.groupEnd();
+  console.log('');
+
+  // 3. 每日人力檢查
+  console.group('3️⃣ 每日人力不足檢查');
+  let covOK=true;
+  const minMap={D:6,E:4,N:3};
+  for(let d=0;d<dIM;d++){
+    const dt=new Date(y,m-1,d+1);
+    const wd=['日','一','二','三','四','五','六'][dt.getDay()];
+    const cov2={D:0,E:0,N:0};
+    nurses.forEach(n=>{
+      const v=sched[n.name]?.[d];
+      if(v&&v!=='OFF'&&v!=='O2'&&v!=='IDS'&&cov2[v]!==undefined) cov2[v]++;
+    });
+    Object.entries(minMap).forEach(([sh,min])=>{
+      if(cov2[sh]<min){
+        console.log(`%c🔴 ${m}/${d+1}（${wd}）${sh}班人力不足：${cov2[sh]}人（最少需${min}人）`,'color:red');
+        covOK=false;
+      }
+    });
+  }
+  if(covOK) console.log('%c✅ 每日人力均符合最低要求','color:green;font-weight:bold');
+  console.groupEnd();
+  console.log('');
+
+  // 4. 班別切換違規檢查
+  console.group('4️⃣ 班別切換違規（N→E、E→D、N→D）');
+  let transOK=true;
+  nurses.forEach(n=>{
+    let last=prevStreaks[n.name]>0?(n.isN?'N':n.allowed[0]):'OFF';
+    for(let d=0;d<dIM;d++){
+      const v=sched[n.name]?.[d]||'OFF';
+      const cur=v==='OFF'||v==='O2'||v==='IDS'?v:v;
+      if((cur==='E'&&last==='N')||(cur==='D'&&last==='E')||(cur==='D'&&last==='N')){
+        console.log(`%c🔴 ${n.name} 第${d+1}天違規切換：${last}→${cur}`,'color:red');
+        transOK=false;
+      }
+      last=cur;
+    }
+  });
+  if(transOK) console.log('%c✅ 無班別切換違規','color:green;font-weight:bold');
+  console.groupEnd();
+
+  console.log('');
+  console.log(`%c📊 總結：OFF範圍 ${minOff}~${maxOff}天 ｜ 目標 ${OFF_GOAL}~${OFF_GOAL+1}天`,'font-size:13px;font-weight:bold');
+  console.groupEnd();
 };
 
 
@@ -1724,7 +1814,12 @@ function renderSchedTable(y,m,days,sched,all,hmap,pubShifts={},prevStreaks={}){
         html+=`<td style="${tdStyle}${tdBorder}" title="${hinfo?.name||''}"><span class="cell ${displayV}${isR?' REQ':''} editable" data-name="${s.name}" data-day="${d}">${displayV}</span></td>`;
         if(displayV==='OFF') off++;
         else if(displayV==='O2'||displayV==='IDS') wk++; // O2/IDS：算上班但不計入人力統計
-        else{wk++;if(cov[v])cov[v][d]++;}
+        else{
+          wk++;
+          // 彈性班排N時，v可能是'N'或sched值，統一用displayV計算人力
+          const covKey=displayV==='D'?'D':displayV==='E'?'E':displayV==='N'?'N':v;
+          if(cov[covKey]!==undefined) cov[covKey][d]++;
+        }
       }
       // 計算紅字OFF（國定假日+例假日的OFF天數）
       let holOff=0;
@@ -2747,7 +2842,11 @@ function refreshCovRow(st){
   STAFF.forEach(s=>{
     const r=sched[s.name];
     if(!r) return;
-    for(let d=0;d<days;d++) if(r[d]&&r[d]!=='OFF') cov[r[d]][d]=(cov[r[d]][d]||0)+1;
+    for(let d=0;d<days;d++){
+      const rv=r[d];
+      if(!rv||rv==='OFF'||rv==='O2'||rv==='IDS') continue;
+      if(cov[rv]!==undefined) cov[rv][d]=(cov[rv][d]||0)+1;
+    }
   });
   ['D','E','N'].forEach(sh=>{
     const mn=MIN_STAFF[sh]||3;
