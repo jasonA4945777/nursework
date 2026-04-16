@@ -3,19 +3,22 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>護理排班 v32m</title>
+<title>護理排班系統 v32m</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root {
   --bg:#f8fafc; --white:#fff; --border:#e4e6ef;
   --text:#1a1d2e; --text2:#8b90a7;
   --accent:#4f6ef7; --accent-bg:#eef1fe;
+  --ok:#16a34a;
   --D:#16a34a; --D-bg:#dcfce7;
   --E:#d97706; --E-bg:#fef3c7;
   --N:#7c3aed; --N-bg:#ede9fe;
+  --OFF:#64748b; --OFF-bg:#e5e7eb;
   --danger:#dc2626; --danger-bg:#fee2e2;
   --holiday:#e11d48; --holiday-bg:#fff1f2;
   --makeup:#b45309; --makeup-bg:#fef3c7;
+  --published:#15803d; --published-bg:#dcfce7;
   --radius:10px; --shadow:0 1px 4px rgba(0,0,0,.08);
 }
 *{box-sizing:border-box;margin:0;padding:0}
@@ -532,6 +535,8 @@ thead th.col-prev{background:#f8f9ff;font-size:9px;color:var(--text2);position:s
     </div>
 </div>
 
+<input id="importExcelInput" type="file" accept=".xlsx,.xls" style="display:none" onchange="importPrevMonthExcel(this)">
+
 <!-- Note Modal -->
 <div class="modal-overlay" id="noteModal">
   <div class="modal-box">
@@ -641,7 +646,7 @@ const DEFAULT_STAFF = [
   {name:'廖梓淳',shift:'D'},{name:'楊珮葶',shift:'D'},{name:'邱紹麒',shift:'D'},
   {name:'陳璟宜',shift:'D'},{name:'姜志胤',shift:'D'},{name:'曹育慈',shift:'D'},
   {name:'周巧蓉',shift:'EN'},{name:'王鈺婕',shift:'E'},{name:'林秉漢',shift:'E'},
-  {name:'許睿庭',shift:'E'},{name:'蔡安琪',shift:'E'},{name:'張庭瑀',shift:'E'},
+  {name:'許睿庭',shift:'E'},{name:'石珮玉',shift:'E'},{name:'張庭瑀',shift:'E'},
   {name:'黃雅亭',shift:'N'},{name:'呂伊茜',shift:'N'},{name:'朱庭儀',shift:'N'},{name:'陳安琪',shift:'N'},
 ];
 let STAFF = [...DEFAULT_STAFF];
@@ -818,21 +823,38 @@ window.renderStaffTable = function renderStaffTable(){
 
 window.toggleAddStaffForm=function(){
   const form=document.getElementById('addStaffForm');
+  if(!form){
+    if(typeof window.showAddToGridModal === 'function') window.showAddToGridModal();
+    return;
+  }
   form.classList.toggle('show');
-  if(form.classList.contains('show')) document.getElementById('newStaffName').focus();
+  if(form.classList.contains('show')) document.getElementById('newStaffName')?.focus();
 };
 
 window.toggleFlexOff=function(val){
-  document.getElementById('flexOffGroup').style.display=val==='FLEX'?'block':'none';
+  const flexOffGroup=document.getElementById('flexOffGroup');
+  if(!flexOffGroup) return;
+  flexOffGroup.style.display=val==='FLEX'?'block':'none';
 };
 window.addStaffMember=async function(){
-  const name=document.getElementById('newStaffName').value.trim();
-  const shift=document.getElementById('newStaffShift').value;
+  const nameEl=document.getElementById('newStaffName');
+  const shiftEl=document.getElementById('newStaffShift');
+  if(!nameEl || !shiftEl){
+    if(typeof window.showAddToGridModal === 'function'){
+      window.showAddToGridModal();
+      toast('已切換到目前的人員管理介面','info');
+      return;
+    }
+    toast('舊版新增表單不存在，請改用目前的人員管理介面','error');
+    return;
+  }
+  const name=nameEl.value.trim();
+  const shift=shiftEl.value;
   if(!name){toast('請輸入姓名','error');return;}
   if(STAFF.find(s=>s.name===name)){toast('此姓名已存在','error');return;}
   const newMember={name,shift};
   if(shift==='FLEX'){
-    const customOff=parseInt(document.getElementById('newStaffOff').value)||9;
+    const customOff=parseInt(document.getElementById('newStaffOff')?.value)||9;
     newMember.customOff=customOff;
   }
   STAFF.push(newMember);
@@ -840,8 +862,8 @@ window.addStaffMember=async function(){
   try{
     await fbSaveStaff(STAFF);
     loader(false);
-    document.getElementById('newStaffName').value='';
-    document.getElementById('addStaffForm').classList.remove('show');
+    nameEl.value='';
+    document.getElementById('addStaffForm')?.classList.remove('show');
     renderStaffTable();
     initSelect();
     loadShiftAssignGrid();
@@ -1876,7 +1898,7 @@ function renderSchedTable(y,m,days,sched,all,hmap,pubShifts={},prevStreaks={}){
 
 // ── 匯入上月班表 Excel ──
 window.triggerImportExcel = function(){
-  document.getElementById('importExcelInput').click();
+  document.getElementById('importExcelInput')?.click();
 };
 
 window.importPrevMonthExcel = async function(input){
