@@ -2097,15 +2097,15 @@ window.exportScheduleExcel = async function(){
   const midlineDay=HOLIDAY_MIDLINE[m]; // 1-indexed
   const midlineCol=midlineDay?midlineDay-1:null; // 0-indexed
 
-  // 顏色
+  // 顏色：對齊使用者提供的範例 Excel 配色
   const C={
-    D:'CCE5FF', E:'FFE5CC', N:'E0CCF5',
-    OFF:'F2F2F2', PREOFF:'FFFF00',
-    TITLE:'1F4E79', TITLE_FG:'FFFFFF',
-    HDR_NORMAL:'BDD7EE', HDR_HOLIDAY:'FF0000', HDR_WEEKEND:'FFC7CE',
-    HDR_FG_HOLIDAY:'FFFFFF', HDR_FG_WEEKEND:'9C0006',
-    GRP_D:'DAEEF3', GRP_E:'FDE9D9', GRP_N:'EAD1DC', GRP_EN:'EDD9FF',
-    STAT_LOW:'FF4444', STAT_LOW_FG:'FFFFFF', STAT_OK:'F8FAFC',
+    D:'FCD5B5', E:'FAC090', N:'BFBFBF',
+    OFF:'FFFFFF', PREOFF:'FFFF00',
+    TITLE:'FFFFFF', TITLE_FG:'000000',
+    HDR_NORMAL:'FFFFFF', HDR_HOLIDAY:'FFFFFF', HDR_WEEKEND:'FFFFFF',
+    HDR_FG_HOLIDAY:'FF0000', HDR_FG_WEEKEND:'FF0000',
+    GRP_D:'FCD5B5', GRP_E:'FAC090', GRP_N:'BFBFBF', GRP_EN:'FFFFFF',
+    STAT_LOW:'FF4444', STAT_LOW_FG:'FFFFFF', STAT_OK:'FFFFFF',
     MIDLINE:'FF0000', // 紅線顏色
   };
 
@@ -2128,7 +2128,7 @@ window.exportScheduleExcel = async function(){
     return b;
   }
   function font(sz=8,bold=false,color='000000'){
-    return {name:'Arial',size:sz,bold,color:{argb:'FF'+color}};
+    return {name:'Noto Sans TC',size:sz,bold,color:{argb:'FF'+color}};
   }
   function align(h='center'){return {horizontal:h,vertical:'middle'};}
 
@@ -2266,14 +2266,14 @@ window.exportScheduleExcel = async function(){
           cell.fill=fill(C.PREOFF);
           cell.font=font(8,true,'856404');
         } else if(v==='D'){
-          cell.fill=fill(isHol?'99C4E4':C.D);
-          cell.font=font(8,true,isHol?'1F4E79':'000000');
+          cell.fill=fill(C.D);
+          cell.font=font(8,true,'000000');
         } else if(v==='E'){
-          cell.fill=fill(isHol?'F5C57B':C.E);
-          cell.font=font(8,true,isHol?'7B3F00':'000000');
+          cell.fill=fill(C.E);
+          cell.font=font(8,true,'000000');
         } else if(v==='N'){
-          cell.fill=fill(isHol?'C9A8E8':C.N);
-          cell.font=font(8,true,isHol?'4B0082':'000000');
+          cell.fill=fill(C.N);
+          cell.font=font(8,true,'000000');
         } else {
           cell.fill=fill(C.OFF);
           cell.font=font(7,false,'888888');
@@ -2858,6 +2858,7 @@ function _doApplyEdit(name, day0, newVal, cellEl, wkEl, offEl){
     }
   }
   refreshCovRow(schedState);
+  closeEditModal();
   toast(`${name} ${schedState.m}/${day0+1} 改為 ${newVal}`,'success');
 };
 function refreshCovRow(st){
