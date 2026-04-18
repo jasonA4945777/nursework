@@ -188,6 +188,8 @@ tbody tr:hover td.col-name{background:#fafbff}
 .cell.OFF{color:#c4c7d6;font-weight:400}
 .cell.O2{background:#fce7f3;color:#be185d;font-weight:700}
 .cell.IDS{background:#fff7ed;color:#c2410c;font-weight:700}
+.cell.locked{box-shadow:inset 0 0 0 2px #0f172a;position:relative}
+.cell.locked::after{content:'🔒';position:absolute;right:-6px;top:-7px;font-size:10px;line-height:1}
 .cell.REQ{outline:2px solid var(--accent);outline-offset:-1px}
 .grp-row td{background:#f8f9ff!important;font-size:10px;font-weight:700;color:var(--text2);letter-spacing:.04em;padding:4px 8px!important}
 .grp-row td.col-name{background:#f8f9ff!important}
@@ -556,11 +558,16 @@ thead th.col-prev{background:#f8f9ff;font-size:9px;color:var(--text2);position:s
   <div class="edit-box">
     <div class="edit-title" id="editModalTitle">修改班別</div>
     <div id="editOptionsInfo" style="display:none"></div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);margin-bottom:10px;cursor:pointer">
+      <input id="editLockNext" type="checkbox">
+      這一格設為鎖定
+    </label>
     <div class="edit-btns">
       <button class="edit-btn D" onclick="applyEdit('D')">D 白班</button>
       <button class="edit-btn E" onclick="applyEdit('E')">E 小夜</button>
       <button class="edit-btn N" onclick="applyEdit('N')">N 大夜</button>
       <button class="edit-btn OFF" onclick="applyEdit('OFF')">OFF 休假</button>
+      <button class="edit-btn cancel" onclick="saveCellLockOnly()">只更新鎖定</button>
       <button class="edit-btn cancel" onclick="closeEditModal()">取消</button>
     </div>
   </div>
@@ -656,6 +663,15 @@ let me = null, myDays = [], modalDay = null;
 // holidayMap[y] = { "YYYY-MM-DD": { name, isHoliday, isMakeup } }
 const holidayCache = {};
 
+function errorDetails(e){
+  return {
+    name: e?.name || null,
+    code: e?.code || null,
+    message: e?.message || String(e),
+    stack: e?.stack || null,
+  };
+}
+
 // ── Firebase ──
 async function fbSave(name,y,m,days){ await setDoc(doc(db,'offRequests',`${name}_${y}_${m}`),{name,year:y,month:m,offDays:days,updatedAt:new Date().toISOString()}); }
 async function fbLoad(name,y,m){ const s=await getDoc(doc(db,'offRequests',`${name}_${y}_${m}`)); return s.exists()?(s.data().offDays||[]): []; }
@@ -670,7 +686,7 @@ async function fbLoadAll(y,m){
     });
     return res;
   }catch(e){
-    console.error('fbLoadAll failed:', { year:y, month:m, error:e });
+    console.error('fbLoadAll failed:', { year:y, month:m, error:errorDetails(e) });
     throw e;
   }
 }
@@ -1116,7 +1132,7 @@ window.renderAllReq=async()=>{
   try{
     all=await fbLoadAll(y,m);
   }catch(e){
-    console.error('renderAllReq failed:', { year:y, month:m, shift:sf||'all', error:e });
+    console.error('renderAllReq failed:', { year:y, month:m, shift:sf||'all', error:errorDetails(e) });
     const msg=e?.code?`載入失敗：${e.code}`:'載入失敗，請查看 Console';
     list.innerHTML=`<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-text">${msg}</div></div>`;
     return;
@@ -1168,10 +1184,11 @@ window.renderAllReq=async()=>{
 };
 
 // ── Schedule ──
-window.generateSchedule=async()=>{
+window.generateSchedule=async(opts={})=>{
   const y=+document.getElementById('admYear').value;
   const m=+document.getElementById('admMonth').value;
   const dIM=new Date(y,m,0).getDate();
+  const preservedLocks=opts.preserveLocks?normalizeLockedCells(opts.lockedCells||schedState?.lockedCells||{}):{};
   document.getElementById('schedOut').innerHTML='<div class="empty"><div class="empty-icon">⚙️</div><div class="empty-text">排班中…</div></div>';
   loader(true);
 
@@ -1179,7 +1196,7 @@ window.generateSchedule=async()=>{
   try{
     [all,hmap]=await Promise.all([fbLoadAll(y,m),fetchHolidays(y)]);
   }catch(e){
-    console.error('generateSchedule failed during preload:', { year:y, month:m, error:e });
+    console.error('generateSchedule failed during preload:', { year:y, month:m, error:errorDetails(e) });
     loader(false);
     toast(e?.code?`載入失敗：${e.code}`:'載入失敗，請查看 Console','error');
     return;
@@ -1193,13 +1210,13 @@ window.generateSchedule=async()=>{
     const pd=await fbLoadPublishedFull(y,m);
     publishedShifts=pd?.shifts||{};
   }catch(e){
-    console.error('generateSchedule failed to load published shifts:', { year:y, month:m, error:e });
+    console.error('generateSchedule failed to load published shifts:', { year:y, month:m, error:errorDetails(e) });
   }
   let staffConfig=[];
   try{
     staffConfig=await fbLoadStaff();
   }catch(e){
-    console.error('generateSchedule failed to load staff config:', { year:y, month:m, error:e });
+    console.error('generateSchedule failed to load staff config:', { year:y, month:m, error:errorDetails(e) });
     staffConfig=[...STAFF];
   }
 
@@ -1283,12 +1300,35 @@ window.generateSchedule=async()=>{
     return {
       name:s.name, shift:s.shift,
       allowed, isFlex, isN, ia,
+      iaOffs,
       realOff, pubOff, myGoal,
       idsDays:idsNotes, o2Days:o2Notes,
       A:new Array(dIM).fill(null),
       last:pl, streak:ps,
       offCnt:0, workCnt:0,
     };
+  });
+
+  nurses.forEach(n=>{
+    const locks=preservedLocks[n.name]||{};
+    Object.entries(locks).forEach(([day,val])=>{
+      const d0=Number(day);
+      if(Number.isNaN(d0)||d0<0||d0>=dIM) return;
+      if(val==='OFF'){
+        n.lockedOffDays=n.lockedOffDays||new Set();
+        n.lockedOffDays.add(d0);
+      }else if(val==='O2'){
+        n.pubOff=n.pubOff||new Set();
+        n.pubOff.add(d0);
+        n.o2Days=n.o2Days||new Set();
+        n.o2Days.add(d0);
+      }else if(val==='IDS'){
+        n.pubOff=n.pubOff||new Set();
+        n.pubOff.add(d0);
+        n.idsDays=n.idsDays||new Set();
+        n.idsDays.add(d0);
+      }
+    });
   });
 
   // ══════════════════════════════════════
@@ -1450,6 +1490,7 @@ window.generateSchedule=async()=>{
         if(n.forceOff?.has(d)) continue;
         if(n.idsDays?.has(d)) continue;
         if(n.o2Days?.has(d)) continue;
+        if(getLockedValue(preservedLocks,n.name,d)!==undefined) continue;
         freeDays.push(d);
       }
 
@@ -1461,7 +1502,7 @@ window.generateSchedule=async()=>{
       }
 
       // 引擎需要安排的 OFF 天數
-      const fixedOff = n.realOff.size + (n.forceOff?.size||0) + n.iaOffs;
+      const fixedOff = n.realOff.size + (n.forceOff?.size||0) + (n.lockedOffDays?.size||0) + n.iaOffs;
       const engineOff = Math.max(0, n.myGoal - fixedOff);
 
       // 均勻分散 + 隨機擾動
@@ -1484,6 +1525,16 @@ window.generateSchedule=async()=>{
     resetNurses(seed);
 
     for(let d0=0;d0<dIM;d0++){
+
+      // ── Step0：鎖定格優先套用 ──
+      nurses.forEach(n=>{
+        if(n.A[d0]!==null) return;
+        const lockedVal=getLockedValue(preservedLocks,n.name,d0);
+        if(lockedVal===undefined) return;
+        if(lockedVal==='OFF'){set(n,d0,'OFF');return;}
+        if(lockedVal==='O2'||lockedVal==='IDS'){set(n,d0,n.allowed[0]);return;}
+        set(n,d0,lockedVal);
+      });
 
       // ── Step1：強制鎖定 ──
       nurses.forEach(n=>{
@@ -1661,6 +1712,11 @@ window.generateSchedule=async()=>{
     const arr=[...n.A];
     if(n.o2Days) n.o2Days.forEach(d=>{ if(arr[d]&&arr[d]!=='OFF') arr[d]='O2'; });
     if(n.idsDays) n.idsDays.forEach(d=>{ if(arr[d]&&arr[d]!=='OFF') arr[d]='IDS'; });
+    const locks=preservedLocks[n.name]||{};
+    Object.entries(locks).forEach(([day,val])=>{
+      const d0=Number(day);
+      if(!Number.isNaN(d0)&&d0>=0&&d0<dIM) arr[d0]=val;
+    });
     sched[n.name]=arr;
   });
 
@@ -1693,7 +1749,7 @@ window.generateSchedule=async()=>{
   const maxOff=Math.max(...nurses.filter(n=>!n.ia).map(n=>n.offCnt));
   toast(`排班完成 ｜ OFF目標:${OFF_GOAL}天 ｜ 實際範圍:${minOff}~${maxOff}天`,'success');
 
-  renderSchedTable(y,m,dIM,sched,all,hmap,publishedShifts,prevStreaks);
+  renderSchedTable(y,m,dIM,sched,all,hmap,publishedShifts,prevStreaks,preservedLocks);
 
   // ── 排班品質檢查（輸出到 Console）──
   console.group('%c📋 排班品質檢查報告', 'font-size:14px;font-weight:bold;color:#2563eb');
@@ -1788,8 +1844,8 @@ window.generateSchedule=async()=>{
 };
 
 
-function renderSchedTable(y,m,days,sched,all,hmap,pubShifts={},prevStreaks={}){
-  schedState={y,m,days,sched,all,hmap,pubShifts,prevStreaks};
+function renderSchedTable(y,m,days,sched,all,hmap,pubShifts={},prevStreaks={},lockedCells={}){
+  schedState={y,m,days,sched,all,hmap,pubShifts,prevStreaks,lockedCells:normalizeLockedCells(lockedCells)};
   const out=document.getElementById('schedOut'); out.innerHTML='';
   // 用當月發布的班別指派計算人數（更準確）
   const sc={D:0,E:0,N:0,EN:0};
@@ -1874,7 +1930,9 @@ function renderSchedTable(y,m,days,sched,all,hmap,pubShifts={},prevStreaks={}){
         const displayV=isIDS?'IDS':isO2?'O2':isPubOff?'O2':(v||'OFF');
         const isMidlineCol=HOLIDAY_MIDLINE[m]&&(d+1)===HOLIDAY_MIDLINE[m];
         const tdBorder=isMidlineCol?'box-shadow:inset -3px 0 0 #ef4444;':'';
-        html+=`<td style="${tdStyle}${tdBorder}" title="${hinfo?.name||''}"><span class="cell ${displayV}${isR?' REQ':''} editable" data-name="${s.name}" data-day="${d}">${displayV}</span></td>`;
+        const isLocked=getLockedValue(schedState.lockedCells,s.name,d)!==undefined;
+        const baseTitle=hinfo?.name||'';
+        html+=`<td style="${tdStyle}${tdBorder}" title="${baseTitle}"><span class="cell ${displayV}${isR?' REQ':''}${isLocked?' locked':''} editable" data-name="${s.name}" data-day="${d}" data-base-title="${baseTitle}" title="${isLocked?(baseTitle?`${baseTitle}｜已鎖定`:'已鎖定'):baseTitle}">${displayV}</span></td>`;
         if(displayV==='OFF') off++;
         else if(displayV==='O2'||displayV==='IDS') wk++; // O2/IDS：算上班但不計入人力統計
         else{
@@ -1923,7 +1981,9 @@ function renderSchedTable(y,m,days,sched,all,hmap,pubShifts={},prevStreaks={}){
   actionBar.style.cssText='display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--accent-bg,#eff6ff);border-radius:10px;font-size:12px;color:var(--accent,#2563eb);flex-wrap:wrap;margin-bottom:10px;position:sticky;top:56px;z-index:50;box-shadow:0 2px 8px rgba(0,0,0,.06)';
   actionBar.innerHTML=`
     <span style="font-size:11px">✏️ 點擊格子修改　｜　點紅色數字補班</span>
+    <span id="lockCountLabel" style="font-size:11px;background:#fff;color:#334155;border:1px solid #cbd5e1;border-radius:999px;padding:4px 10px">已鎖定 ${countLockedCells(schedState.lockedCells)} 格</span>
     <div style="display:flex;gap:6px;margin-left:auto;align-items:center;flex-wrap:wrap">
+      <button onclick="rerunScheduleKeepLocks()" style="background:#0f172a;color:#fff;border:none;border-radius:8px;padding:7px 12px;font-weight:700;cursor:pointer;font-size:12px">🔒 保留鎖定重排</button>
       <button id="undoBtn" onclick="undoEdit()" disabled style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;border-radius:8px;padding:7px 12px;font-weight:700;cursor:pointer;font-size:12px;opacity:0.4" title="沒有可還原的操作">↩ 上一步</button>
       <button onclick="exportScheduleExcel()" style="background:#16a34a;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-weight:700;cursor:pointer;font-size:12px">📊 匯出 Excel</button>
       <button onclick="saveEditedSchedule()" style="background:var(--accent,#2563eb);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-weight:700;cursor:pointer;font-size:12px">💾 儲存班表</button>
@@ -2417,21 +2477,27 @@ async function fbLoadPublishedFull(y,m){
     const s=await getDoc(doc(db,'publishedShifts',`${y}_${m}`));
     return s.exists()?s.data():null;
   }catch(e){
-    console.error('fbLoadPublishedFull failed:', { year:y, month:m, error:e });
+    console.error('fbLoadPublishedFull failed:', { year:y, month:m, error:errorDetails(e) });
     throw e;
   }
 }
 
 // ── Firebase: Published Schedule (班表) ──
-async function fbSaveSchedule(y,m,scheduleData){
-  await setDoc(doc(db,'publishedSchedule',`${y}_${m}`),{year:y,month:m,schedule:scheduleData,publishedAt:new Date().toISOString()});
+async function fbSaveSchedule(y,m,scheduleData,lockedCells={}){
+  await setDoc(doc(db,'publishedSchedule',`${y}_${m}`),{
+    year:y,
+    month:m,
+    schedule:scheduleData,
+    lockedCells:normalizeLockedCells(lockedCells),
+    publishedAt:new Date().toISOString()
+  });
 }
 async function fbLoadSchedule(y,m){
   try{
     const s=await getDoc(doc(db,'publishedSchedule',`${y}_${m}`));
     return s.exists()?s.data():null;
   }catch(e){
-    console.error('fbLoadSchedule failed:', { year:y, month:m, error:e });
+    console.error('fbLoadSchedule failed:', { year:y, month:m, error:errorDetails(e) });
     throw e;
   }
 }
@@ -2460,7 +2526,7 @@ async function _loadShiftGrid(y, m){
     pubData=await fbLoadPublishedFull(y,m);
     pub=pubData?.shifts||{};
   }catch(e){
-    console.error('_loadShiftGrid failed to load published shifts:', { year:y, month:m, error:e });
+    console.error('_loadShiftGrid failed to load published shifts:', { year:y, month:m, error:errorDetails(e) });
   }
   // Init pendingShifts from published or STAFF default
   pendingShifts={};
@@ -2743,6 +2809,59 @@ let schedState = null; // { y, m, days, sched, all, hmap, pubShifts }
 let editTarget = null; // { name, day0, cellEl, wkEl, offEl }
 let editHistory = []; // undo history (max 50 steps)
 
+function normalizeLockedCells(lockedCells){
+  const out={};
+  if(!lockedCells||typeof lockedCells!=='object') return out;
+  Object.entries(lockedCells).forEach(([name, days])=>{
+    if(!days||typeof days!=='object') return;
+    const row={};
+    Object.entries(days).forEach(([day,val])=>{
+      if(val==null||val==='') return;
+      row[String(Number(day))]=val;
+    });
+    if(Object.keys(row).length) out[name]=row;
+  });
+  return out;
+}
+
+function getLockedValue(lockedCells,name,day0){
+  return lockedCells?.[name]?.[String(day0)];
+}
+
+function isCellLocked(name,day0){
+  return getLockedValue(schedState?.lockedCells,name,day0)!==undefined;
+}
+
+function updateCellLockUI(name,day0){
+  const cell=document.querySelector(`.cell.editable[data-name="${name}"][data-day="${day0}"]`);
+  if(!cell) return;
+  const locked=isCellLocked(name,day0);
+  cell.classList.toggle('locked',locked);
+  const baseTitle=cell.dataset.baseTitle||'';
+  cell.title=locked?(baseTitle?`${baseTitle}｜已鎖定`:'已鎖定'):baseTitle;
+}
+
+function setCellLock(name,day0,locked,valOverride){
+  if(!schedState) return;
+  schedState.lockedCells=normalizeLockedCells(schedState.lockedCells);
+  if(locked){
+    const val=valOverride ?? schedState.sched?.[name]?.[day0];
+    if(val==null) return;
+    if(!schedState.lockedCells[name]) schedState.lockedCells[name]={};
+    schedState.lockedCells[name][String(day0)]=val;
+  }else if(schedState.lockedCells?.[name]){
+    delete schedState.lockedCells[name][String(day0)];
+    if(!Object.keys(schedState.lockedCells[name]).length) delete schedState.lockedCells[name];
+  }
+  updateCellLockUI(name,day0);
+  const counter=document.getElementById('lockCountLabel');
+  if(counter) counter.textContent=`已鎖定 ${countLockedCells(schedState.lockedCells)} 格`;
+}
+
+function countLockedCells(lockedCells){
+  return Object.values(normalizeLockedCells(lockedCells)).reduce((sum,row)=>sum+Object.keys(row).length,0);
+}
+
 // ── 連班檢查工具 ──
 function calcStreakAfterEdit(name, day0, newVal){
   if(!schedState) return {warnings:[]};
@@ -2782,6 +2901,8 @@ window.openEditModal = function(name, day0, cellEl, wkEl, offEl){
   // 不在選項旁顯示提示，改為點下去後才跳出警示
   const infoEl=document.getElementById('editOptionsInfo');
   if(infoEl) infoEl.innerHTML='';
+  const lockEl=document.getElementById('editLockNext');
+  if(lockEl) lockEl.checked=isCellLocked(name,day0);
 
   document.getElementById('editModal').classList.add('show');
 };
@@ -2798,11 +2919,13 @@ window.undoEdit = function(){
   if(!schedState||editHistory.length===0) return;
   const {name, day0, oldVal} = editHistory.pop();
   schedState.sched[name][day0] = oldVal;
+  if(isCellLocked(name,day0)) setCellLock(name,day0,true,oldVal);
   // 更新顯示
   const cellEl=document.querySelector(`.cell.editable[data-name="${name}"][data-day="${day0}"]`);
   if(cellEl){
     cellEl.className=`cell ${oldVal} editable`;
     cellEl.textContent=oldVal;
+    updateCellLockUI(name,day0);
   }
   // 更新上班/OFF統計
   const r=schedState.sched[name];
@@ -2835,6 +2958,14 @@ window.undoEdit = function(){
 window.closeEditModal = function(){
   document.getElementById('editModal').classList.remove('show');
   editTarget = null;
+};
+window.saveCellLockOnly = function(){
+  if(!editTarget||!schedState) return;
+  const {name,day0}=editTarget;
+  const shouldLock=!!document.getElementById('editLockNext')?.checked;
+  setCellLock(name,day0,shouldLock);
+  closeEditModal();
+  toast(`${name} ${schedState.m}/${day0+1} ${shouldLock?'已鎖定':'已解鎖'}`,'success');
 };
 window.applyEdit = function(newVal){
   if(!editTarget || !schedState) return;
@@ -2911,8 +3042,10 @@ function _doApplyEdit(name, day0, newVal, cellEl, wkEl, offEl){
     }
   }
   refreshCovRow(schedState);
+  const shouldLock=!!document.getElementById('editLockNext')?.checked;
+  setCellLock(name,day0,shouldLock,newVal);
   closeEditModal();
-  toast(`${name} ${schedState.m}/${day0+1} 改為 ${newVal}`,'success');
+  toast(`${name} ${schedState.m}/${day0+1} 改為 ${newVal}${shouldLock?'（已鎖定）':''}`,'success');
 };
 function refreshCovRow(st){
   if(!st) return;
@@ -3051,9 +3184,11 @@ window.applySuggest = function(name, day0, sh){
   updateUndoBtn();
   // 修改
   schedState.sched[name][day0]=sh;
+  if(isCellLocked(name,day0)) setCellLock(name,day0,true,sh);
   // 更新格子
   const cellEl=document.querySelector(`.cell.editable[data-name="${name}"][data-day="${day0}"]`);
   if(cellEl){cellEl.className=`cell ${sh} editable`;cellEl.textContent=sh;}
+  updateCellLockUI(name,day0);
   // 更新統計
   const r=schedState.sched[name];
   const wk=r.filter(v=>v&&v!=='OFF').length;
@@ -3082,6 +3217,20 @@ window.applySuggest = function(name, day0, sh){
   toast(`${name} ${schedState.m}/${day0+1} 補排 ${sh} 班 ✓`,'success');
 };
 
+window.rerunScheduleKeepLocks = function(){
+  if(!schedState){
+    toast('請先排班','error');
+    return;
+  }
+  const lockedCount=countLockedCells(schedState.lockedCells);
+  if(lockedCount===0){
+    toast('目前沒有鎖定格，將依一般模式重排','info');
+  }else{
+    toast(`保留 ${lockedCount} 格鎖定內容重新排班…`,'info');
+  }
+  generateSchedule({preserveLocks:true,lockedCells:schedState.lockedCells});
+};
+
 // ── 自動載入班表（排班管理頁進入時）──
 async function autoLoadSchedule(){
   const y=+document.getElementById('admYear').value;
@@ -3092,6 +3241,7 @@ async function autoLoadSchedule(){
     const saved=await fbLoadSchedule(y,m);
     if(!saved||!saved.schedule) return;
     const sched=saved.schedule;
+    const lockedCells=normalizeLockedCells(saved.lockedCells||{});
     const dIM=new Date(y,m,0).getDate();
     const [all,hmap]=await Promise.all([fbLoadAll(y,m),fetchHolidays(y)]);
     let publishedShifts={};
@@ -3102,7 +3252,7 @@ async function autoLoadSchedule(){
       const pd=await getDoc(doc(db,'monthEndStreak',`${py}_${pm}`));
       if(pd.exists()) prevStreaks=pd.data().streaks||{};
     }catch(e){}
-    renderSchedTable(y,m,dIM,sched,all,hmap,publishedShifts,prevStreaks);
+    renderSchedTable(y,m,dIM,sched,all,hmap,publishedShifts,prevStreaks,lockedCells);
     toast(`已自動載入 ${y}年${m}月 儲存的班表`,'info');
   }catch(e){}
 }
@@ -3393,12 +3543,12 @@ window.saveSpecialRules = async function(){
 // ── 儲存已調整的班表 ──// ── 儲存已調整的班表 ──
 window.saveEditedSchedule = async function(){
   if(!schedState) return;
-  const {y,m,sched} = schedState;
+  const {y,m,sched,lockedCells={}} = schedState;
   const dIM=new Date(y,m,0).getDate();
   loader(true);
   try{
     // 儲存班表
-    await fbSaveSchedule(y,m,sched);
+    await fbSaveSchedule(y,m,sched,lockedCells);
     // 同時計算並儲存月底連班資料（供下個月排班使用）
     const streaks=calcMonthEndStreak(sched,dIM);
     await setDoc(doc(db,'monthEndStreak',`${y}_${m}`),{
