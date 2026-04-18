@@ -188,8 +188,31 @@ tbody tr:hover td.col-name{background:#fafbff}
 .cell.OFF{color:#c4c7d6;font-weight:400}
 .cell.O2{background:#fce7f3;color:#be185d;font-weight:700}
 .cell.IDS{background:#fff7ed;color:#c2410c;font-weight:700}
-.cell.locked{box-shadow:inset 0 0 0 2px #0f172a;position:relative}
-.cell.locked::after{content:'🔒';position:absolute;right:-6px;top:-7px;font-size:10px;line-height:1}
+.cell.locked{
+  box-shadow:inset 0 0 0 2px #b45309, 0 0 0 1px #fbbf24;
+  background-image:repeating-linear-gradient(-45deg, rgba(251,191,36,.22) 0 4px, rgba(255,255,255,0) 4px 8px);
+  position:relative;
+  overflow:visible;
+}
+.cell.locked::before{
+  content:'';
+  position:absolute;
+  left:-1px;
+  top:-1px;
+  width:0;
+  height:0;
+  border-top:9px solid #f59e0b;
+  border-right:9px solid transparent;
+}
+.cell.locked::after{
+  content:'🔒';
+  position:absolute;
+  right:-7px;
+  top:-8px;
+  font-size:11px;
+  line-height:1;
+  filter:drop-shadow(0 1px 1px rgba(0,0,0,.25));
+}
 .cell.REQ{outline:2px solid var(--accent);outline-offset:-1px}
 .grp-row td{background:#f8f9ff!important;font-size:10px;font-weight:700;color:var(--text2);letter-spacing:.04em;padding:4px 8px!important}
 .grp-row td.col-name{background:#f8f9ff!important}
@@ -1980,7 +2003,7 @@ function renderSchedTable(y,m,days,sched,all,hmap,pubShifts={},prevStreaks={},lo
   const actionBar=document.createElement('div');
   actionBar.style.cssText='display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--accent-bg,#eff6ff);border-radius:10px;font-size:12px;color:var(--accent,#2563eb);flex-wrap:wrap;margin-bottom:10px;position:sticky;top:56px;z-index:50;box-shadow:0 2px 8px rgba(0,0,0,.06)';
   actionBar.innerHTML=`
-    <span style="font-size:11px">✏️ 點擊格子修改　｜　點紅色數字補班</span>
+    <span style="font-size:11px">✏️ 點擊格子修改　｜　點紅色數字補班　｜　🔒 金框斜紋格 = 已鎖定</span>
     <span id="lockCountLabel" style="font-size:11px;background:#fff;color:#334155;border:1px solid #cbd5e1;border-radius:999px;padding:4px 10px">已鎖定 ${countLockedCells(schedState.lockedCells)} 格</span>
     <div style="display:flex;gap:6px;margin-left:auto;align-items:center;flex-wrap:wrap">
       <button onclick="rerunScheduleKeepLocks()" style="background:#0f172a;color:#fff;border:none;border-radius:8px;padding:7px 12px;font-weight:700;cursor:pointer;font-size:12px">🔒 保留鎖定重排</button>
