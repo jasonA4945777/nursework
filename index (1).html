@@ -1176,16 +1176,32 @@ window.generateSchedule=async()=>{
   loader(true);
 
   let all,hmap;
-  try{[all,hmap]=await Promise.all([fbLoadAll(y,m),fetchHolidays(y)]);}
-  catch(e){loader(false);toast('載入失敗','error');return;}
+  try{
+    [all,hmap]=await Promise.all([fbLoadAll(y,m),fetchHolidays(y)]);
+  }catch(e){
+    console.error('generateSchedule failed during preload:', { year:y, month:m, error:e });
+    loader(false);
+    toast(e?.code?`載入失敗：${e.code}`:'載入失敗，請查看 Console','error');
+    return;
+  }
   loader(false);
 
   await loadSpecialRules(y,m);
 
   let publishedShifts={};
-  try{const pd=await fbLoadPublishedFull(y,m);publishedShifts=pd?.shifts||{};}catch(e){}
+  try{
+    const pd=await fbLoadPublishedFull(y,m);
+    publishedShifts=pd?.shifts||{};
+  }catch(e){
+    console.error('generateSchedule failed to load published shifts:', { year:y, month:m, error:e });
+  }
   let staffConfig=[];
-  try{staffConfig=await fbLoadStaff();}catch(e){staffConfig=[...STAFF];}
+  try{
+    staffConfig=await fbLoadStaff();
+  }catch(e){
+    console.error('generateSchedule failed to load staff config:', { year:y, month:m, error:e });
+    staffConfig=[...STAFF];
+  }
 
   // 上個月月底連班
   let prevStreaks={};
@@ -2397,8 +2413,13 @@ async function fbLoadPublished(y,m){
   return s.exists()?(s.data().shifts||{}):{};
 }
 async function fbLoadPublishedFull(y,m){
-  const s=await getDoc(doc(db,'publishedShifts',`${y}_${m}`));
-  return s.exists()?s.data():null;
+  try{
+    const s=await getDoc(doc(db,'publishedShifts',`${y}_${m}`));
+    return s.exists()?s.data():null;
+  }catch(e){
+    console.error('fbLoadPublishedFull failed:', { year:y, month:m, error:e });
+    throw e;
+  }
 }
 
 // ── Firebase: Published Schedule (班表) ──
@@ -2406,8 +2427,13 @@ async function fbSaveSchedule(y,m,scheduleData){
   await setDoc(doc(db,'publishedSchedule',`${y}_${m}`),{year:y,month:m,schedule:scheduleData,publishedAt:new Date().toISOString()});
 }
 async function fbLoadSchedule(y,m){
-  const s=await getDoc(doc(db,'publishedSchedule',`${y}_${m}`));
-  return s.exists()?s.data():null;
+  try{
+    const s=await getDoc(doc(db,'publishedSchedule',`${y}_${m}`));
+    return s.exists()?s.data():null;
+  }catch(e){
+    console.error('fbLoadSchedule failed:', { year:y, month:m, error:e });
+    throw e;
+  }
 }
 
 // ── Shift Assignment Grid (Admin) ──
@@ -2430,7 +2456,12 @@ async function _loadShiftGrid(y, m){
   const grid=document.getElementById('shiftAssignGrid');
   grid.innerHTML='<div style="padding:20px;color:var(--text2);font-size:13px">⏳ 載入中…</div>';
   let pub={}, pubData=null;
-  try{ pubData=await fbLoadPublishedFull(y,m); pub=pubData?.shifts||{}; }catch(e){}
+  try{
+    pubData=await fbLoadPublishedFull(y,m);
+    pub=pubData?.shifts||{};
+  }catch(e){
+    console.error('_loadShiftGrid failed to load published shifts:', { year:y, month:m, error:e });
+  }
   // Init pendingShifts from published or STAFF default
   pendingShifts={};
   STAFF.forEach(s=>{ pendingShifts[s.name]=pub[s.name]||s.shift; }); // pub[name] may be array for flex
