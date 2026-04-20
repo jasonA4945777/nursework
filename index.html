@@ -2293,7 +2293,7 @@ window.exportScheduleExcel = async function(){
     // 紅字日=紅底白字，週末=粉底紅字，一般=藍底
     if(isHol){
       cell.fill=fill(C.HDR_HOLIDAY);
-      cell.font=font(7,true,C.TITLE_FG);
+      cell.font=font(7,true,C.HDR_FG_HOLIDAY);
     } else if(isWe){
       cell.fill=fill(C.HDR_WEEKEND);
       cell.font=font(7,true,C.HDR_FG_WEEKEND);
