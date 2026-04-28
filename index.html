@@ -484,9 +484,9 @@ thead th.col-prev{background:#f8f9ff;font-size:9px;color:var(--text2);position:s
     <!-- 排班管理 -->
     <div class="page" id="pageAdmin">
       <div class="adm-controls">
-        <div class="grp"><label>年份</label><input type="number" id="admYear" min="2020" max="2099" value="2024" onchange="loadShiftAssignGrid()"></div>
+        <div class="grp"><label>年份</label><input type="number" id="admYear" min="2020" max="2099" value="2024" onchange="handleAdminMonthChange()"></div>
         <div class="grp"><label>月份</label>
-          <select id="admMonth" onchange="loadShiftAssignGrid()">
+          <select id="admMonth" onchange="handleAdminMonthChange()">
             <option value="1">1月</option><option value="2">2月</option><option value="3">3月</option><option value="4">4月</option><option value="5">5月</option><option value="6">6月</option><option value="7">7月</option><option value="8">8月</option><option value="9">9月</option><option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
           </select>
         </div>
@@ -997,7 +997,7 @@ async function enterApp(){
   renderAllReq();
 }
 window.logout=()=>{
-  me=null;myDays=[];
+  me=null;myDays=[];schedState=null;editHistory=[];editTarget=null;
   document.getElementById('appScreen').classList.remove('active');
   document.getElementById('loginScreen').classList.add('active');
   document.getElementById('loginName').value='';document.getElementById('adminPwd').value='';
@@ -1035,6 +1035,32 @@ window.switchTab=el=>{
   if(n==='staffMgmt') loadStaffMgmtPage();
 };
 function switchTabByName(n){const t=document.querySelector(`[data-page="${n}"]`);if(t)switchTab(t);}
+window.handleAdminMonthChange=async function(){
+  schedState=null;
+  await loadShiftAssignGrid();
+  await autoLoadSchedule();
+};
+function initCurrentMonthDefaults(){
+  const now=new Date();
+  const y=now.getFullYear();
+  const m=now.getMonth()+1;
+  ['myYear','admYear','msYear','srYear','smYear'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.value=y;
+  });
+  ['myMonth','admMonth','fMonth','msMonth','srMonth','smMonth'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.value=m;
+  });
+  const fYear=document.getElementById('fYear');
+  if(fYear){
+    const years=[y-1,y,y+1];
+    fYear.innerHTML=years.map(yr=>`<option value="${yr}">${yr}年</option>`).join('');
+    fYear.value=y;
+  }
+  _srYear=y;
+  _srMonth=m;
+}
 
 // ── Calendar ──
 window.loadMyOff=async()=>{
@@ -1774,6 +1800,13 @@ window.generateSchedule=async(opts={})=>{
 
   renderSchedTable(y,m,dIM,sched,all,hmap,publishedShifts,prevStreaks,preservedLocks);
 
+  try{
+    await persistScheduleSnapshot(y,m,sched,preservedLocks);
+  }catch(e){
+    console.error('auto-save schedule failed after generateSchedule:', { year:y, month:m, error:errorDetails(e) });
+    toast('班表已產生，但自動儲存失敗，請再按一次「儲存班表」','error');
+  }
+
   // ── 排班品質檢查（輸出到 Console）──
   console.group('%c📋 排班品質檢查報告', 'font-size:14px;font-weight:bold;color:#2563eb');
   const nGoalDisplay=Math.min(OFF_GOAL+1, Math.max(8, OFF_GOAL-1));
@@ -2220,13 +2253,13 @@ window.exportScheduleExcel = async function(){
 
   // 顏色：對齊使用者提供的範例 Excel 配色
   const C={
-    D:'FCD5B5', E:'FAC090', N:'BFBFBF',
+    D:'FFFFFF', E:'FFFFFF', N:'FFFFFF',
     OFF:'FFFFFF', PREOFF:'FFFF00',
     TITLE:'FFFFFF', TITLE_FG:'000000',
     HDR_NORMAL:'FFFFFF', HDR_HOLIDAY:'FFFFFF', HDR_WEEKEND:'FFFFFF',
     HDR_FG_HOLIDAY:'FF0000', HDR_FG_WEEKEND:'FF0000',
-    GRP_D:'FCD5B5', GRP_E:'FAC090', GRP_N:'BFBFBF', GRP_EN:'FFFFFF',
-    STAT_LOW:'FF4444', STAT_LOW_FG:'FFFFFF', STAT_OK:'FFFFFF',
+    GRP_D:'FFFFFF', GRP_E:'FFFFFF', GRP_N:'FFFFFF', GRP_EN:'FFFFFF',
+    STAT_LOW:'FFFFFF', STAT_LOW_FG:'FF4444', STAT_OK:'FFFFFF',
     MIDLINE:'FF0000', // 紅線顏色
   };
 
@@ -2388,13 +2421,13 @@ window.exportScheduleExcel = async function(){
           cell.font=font(8,true,'856404');
         } else if(v==='D'){
           cell.fill=fill(C.D);
-          cell.font=font(8,true,'000000');
+          cell.font=font(8,true,'16A34A');
         } else if(v==='E'){
           cell.fill=fill(C.E);
-          cell.font=font(8,true,'000000');
+          cell.font=font(8,true,'D97706');
         } else if(v==='N'){
           cell.fill=fill(C.N);
-          cell.font=font(8,true,'000000');
+          cell.font=font(8,true,'7C3AED');
         } else {
           cell.fill=fill(C.OFF);
           cell.font=font(7,false,'888888');
@@ -2523,6 +2556,18 @@ async function fbLoadSchedule(y,m){
     console.error('fbLoadSchedule failed:', { year:y, month:m, error:errorDetails(e) });
     throw e;
   }
+}
+
+async function persistScheduleSnapshot(y,m,sched,lockedCells={}){
+  const dIM=new Date(y,m,0).getDate();
+  await fbSaveSchedule(y,m,sched,lockedCells);
+  const streaks=calcMonthEndStreak(sched,dIM);
+  await setDoc(doc(db,'monthEndStreak',`${y}_${m}`),{
+    year:y,
+    month:m,
+    streaks,
+    savedAt:new Date().toISOString()
+  });
 }
 
 // ── Shift Assignment Grid (Admin) ──
@@ -3567,17 +3612,9 @@ window.saveSpecialRules = async function(){
 window.saveEditedSchedule = async function(){
   if(!schedState) return;
   const {y,m,sched,lockedCells={}} = schedState;
-  const dIM=new Date(y,m,0).getDate();
   loader(true);
   try{
-    // 儲存班表
-    await fbSaveSchedule(y,m,sched,lockedCells);
-    // 同時計算並儲存月底連班資料（供下個月排班使用）
-    const streaks=calcMonthEndStreak(sched,dIM);
-    await setDoc(doc(db,'monthEndStreak',`${y}_${m}`),{
-      year:y, month:m, streaks,
-      savedAt:new Date().toISOString()
-    });
+    await persistScheduleSnapshot(y,m,sched,lockedCells);
     loader(false);
     toast('班表已儲存 ✓（已記錄月底連班資料）','success');
   }catch(e){
@@ -3587,6 +3624,7 @@ window.saveEditedSchedule = async function(){
 };
 
 // ── Init ──
+initCurrentMonthDefaults();
 initSelect(); // 立即填充（用 DEFAULT_STAFF）
 loadStaffFromDB(); // 從 Firebase 更新
 document.getElementById('noteModal').addEventListener('click',function(e){if(e.target===this)closeModal();});
