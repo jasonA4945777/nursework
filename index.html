@@ -1040,6 +1040,23 @@ window.handleAdminMonthChange=async function(){
   await loadShiftAssignGrid();
   await autoLoadSchedule();
 };
+function formatSavedAt(ts){
+  if(!ts) return '尚未存檔';
+  const d=new Date(ts);
+  if(Number.isNaN(d.getTime())) return '尚未存檔';
+  return d.toLocaleString('zh-TW',{
+    year:'numeric',
+    month:'2-digit',
+    day:'2-digit',
+    hour:'2-digit',
+    minute:'2-digit'
+  });
+}
+function updateScheduleSavedAtLabel(savedAt){
+  if(schedState) schedState.savedAt=savedAt||null;
+  const el=document.getElementById('scheduleSavedAt');
+  if(el) el.textContent=`上次存檔：${formatSavedAt(savedAt)}`;
+}
 function initCurrentMonthDefaults(){
   const now=new Date();
   const y=now.getFullYear();
@@ -1798,10 +1815,11 @@ window.generateSchedule=async(opts={})=>{
   const maxOff=Math.max(...nurses.filter(n=>!n.ia).map(n=>n.offCnt));
   toast(`排班完成 ｜ OFF目標:${OFF_GOAL}天 ｜ 實際範圍:${minOff}~${maxOff}天`,'success');
 
-  renderSchedTable(y,m,dIM,sched,all,hmap,publishedShifts,prevStreaks,preservedLocks);
+  renderSchedTable(y,m,dIM,sched,all,hmap,publishedShifts,prevStreaks,preservedLocks,schedState?.savedAt||null);
 
   try{
-    await persistScheduleSnapshot(y,m,sched,preservedLocks);
+    const savedAt=await persistScheduleSnapshot(y,m,sched,preservedLocks);
+    updateScheduleSavedAtLabel(savedAt);
   }catch(e){
     console.error('auto-save schedule failed after generateSchedule:', { year:y, month:m, error:errorDetails(e) });
     toast('班表已產生，但自動儲存失敗，請再按一次「儲存班表」','error');
@@ -1900,8 +1918,8 @@ window.generateSchedule=async(opts={})=>{
 };
 
 
-function renderSchedTable(y,m,days,sched,all,hmap,pubShifts={},prevStreaks={},lockedCells={}){
-  schedState={y,m,days,sched,all,hmap,pubShifts,prevStreaks,lockedCells:normalizeLockedCells(lockedCells)};
+function renderSchedTable(y,m,days,sched,all,hmap,pubShifts={},prevStreaks={},lockedCells={},savedAt=null){
+  schedState={y,m,days,sched,all,hmap,pubShifts,prevStreaks,lockedCells:normalizeLockedCells(lockedCells),savedAt};
   const out=document.getElementById('schedOut'); out.innerHTML='';
   // 用當月發布的班別指派計算人數（更準確）
   const sc={D:0,E:0,N:0,EN:0};
@@ -2038,6 +2056,7 @@ function renderSchedTable(y,m,days,sched,all,hmap,pubShifts={},prevStreaks={},lo
   actionBar.innerHTML=`
     <span style="font-size:11px">✏️ 點擊格子修改　｜　點紅色數字補班　｜　🔒 金框斜紋格 = 已鎖定</span>
     <span id="lockCountLabel" style="font-size:11px;background:#fff;color:#334155;border:1px solid #cbd5e1;border-radius:999px;padding:4px 10px">已鎖定 ${countLockedCells(schedState.lockedCells)} 格</span>
+    <span id="scheduleSavedAt" style="font-size:11px;background:#fff;color:#334155;border:1px solid #cbd5e1;border-radius:999px;padding:4px 10px">上次存檔：${formatSavedAt(savedAt)}</span>
     <div style="display:flex;gap:6px;margin-left:auto;align-items:center;flex-wrap:wrap">
       <button onclick="rerunScheduleKeepLocks()" style="background:#0f172a;color:#fff;border:none;border-radius:8px;padding:7px 12px;font-weight:700;cursor:pointer;font-size:12px">🔒 保留鎖定重排</button>
       <button id="undoBtn" onclick="undoEdit()" disabled style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;border-radius:8px;padding:7px 12px;font-weight:700;cursor:pointer;font-size:12px;opacity:0.4" title="沒有可還原的操作">↩ 上一步</button>
@@ -2430,7 +2449,7 @@ window.exportScheduleExcel = async function(){
           cell.font=font(8,true,'7C3AED');
         } else {
           cell.fill=fill(C.OFF);
-          cell.font=font(7,false,'888888');
+          cell.font=font(6,false,'888888');
         }
         if(v==='OFF') offCnt++; else workCnt++;
       }
@@ -2539,13 +2558,13 @@ async function fbLoadPublishedFull(y,m){
 }
 
 // ── Firebase: Published Schedule (班表) ──
-async function fbSaveSchedule(y,m,scheduleData,lockedCells={}){
+async function fbSaveSchedule(y,m,scheduleData,lockedCells={},publishedAt=new Date().toISOString()){
   await setDoc(doc(db,'publishedSchedule',`${y}_${m}`),{
     year:y,
     month:m,
     schedule:scheduleData,
     lockedCells:normalizeLockedCells(lockedCells),
-    publishedAt:new Date().toISOString()
+    publishedAt
   });
 }
 async function fbLoadSchedule(y,m){
@@ -2560,14 +2579,16 @@ async function fbLoadSchedule(y,m){
 
 async function persistScheduleSnapshot(y,m,sched,lockedCells={}){
   const dIM=new Date(y,m,0).getDate();
-  await fbSaveSchedule(y,m,sched,lockedCells);
+  const savedAt=new Date().toISOString();
+  await fbSaveSchedule(y,m,sched,lockedCells,savedAt);
   const streaks=calcMonthEndStreak(sched,dIM);
   await setDoc(doc(db,'monthEndStreak',`${y}_${m}`),{
     year:y,
     month:m,
     streaks,
-    savedAt:new Date().toISOString()
+    savedAt
   });
+  return savedAt;
 }
 
 // ── Shift Assignment Grid (Admin) ──
@@ -3320,7 +3341,7 @@ async function autoLoadSchedule(){
       const pd=await getDoc(doc(db,'monthEndStreak',`${py}_${pm}`));
       if(pd.exists()) prevStreaks=pd.data().streaks||{};
     }catch(e){}
-    renderSchedTable(y,m,dIM,sched,all,hmap,publishedShifts,prevStreaks,lockedCells);
+    renderSchedTable(y,m,dIM,sched,all,hmap,publishedShifts,prevStreaks,lockedCells,saved.publishedAt||null);
     toast(`已自動載入 ${y}年${m}月 儲存的班表`,'info');
   }catch(e){}
 }
@@ -3614,8 +3635,9 @@ window.saveEditedSchedule = async function(){
   const {y,m,sched,lockedCells={}} = schedState;
   loader(true);
   try{
-    await persistScheduleSnapshot(y,m,sched,lockedCells);
+    const savedAt=await persistScheduleSnapshot(y,m,sched,lockedCells);
     loader(false);
+    updateScheduleSavedAtLabel(savedAt);
     toast('班表已儲存 ✓（已記錄月底連班資料）','success');
   }catch(e){
     loader(false);
