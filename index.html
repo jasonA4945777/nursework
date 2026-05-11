@@ -491,6 +491,7 @@ thead th.col-prev{background:#f8f9ff;font-size:9px;color:var(--text2);position:s
           </select>
         </div>
         <button class="btn btn-sm" onclick="openPrevMonthModal()" style="align-self:flex-end;background:#f0fdf4;color:#16a34a;border:1px solid #86efac;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer">📅 上月連班設定</button>
+  <button class="btn btn-sm" onclick="showScheduleSaveInfo()" style="align-self:flex-end;background:#fff7ed;color:#c2410c;border:1px solid #fdba74;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer">🕘 上次存檔紀錄</button>
   <button class="btn btn-primary btn-sm" onclick="generateSchedule()" style="align-self:flex-end">⚡ 自動排班</button>
 </div>
 
@@ -1037,6 +1038,7 @@ window.switchTab=el=>{
 function switchTabByName(n){const t=document.querySelector(`[data-page="${n}"]`);if(t)switchTab(t);}
 window.handleAdminMonthChange=async function(){
   schedState=null;
+  renderScheduleEmptyState('正在切換月份…');
   await loadShiftAssignGrid();
   await autoLoadSchedule();
 };
@@ -1056,7 +1058,31 @@ function updateScheduleSavedAtLabel(savedAt){
   if(schedState) schedState.savedAt=savedAt||null;
   const el=document.getElementById('scheduleSavedAt');
   if(el) el.textContent=`上次存檔：${formatSavedAt(savedAt)}`;
+  if(schedState){
+    setLastScheduleRecordInfo({
+      y:schedState.y,
+      m:schedState.m,
+      savedAt:savedAt||null,
+      hasSaved:!!savedAt
+    });
+  }
 }
+window.showScheduleSaveInfo=function(){
+  const y=+document.getElementById('admYear').value;
+  const m=+document.getElementById('admMonth').value;
+  const info=lastScheduleRecordInfo&&lastScheduleRecordInfo.y===y&&lastScheduleRecordInfo.m===m
+    ? lastScheduleRecordInfo
+    : {y,m,savedAt:null,hasSaved:false};
+  const msg=info.hasSaved
+    ? `${info.y}年${info.m}月\n上次存檔時間：${formatSavedAt(info.savedAt)}`
+    : `${y}年${m}月\n目前沒有已存檔班表。\n如果剛切換月份，畫面現在顯示的是空白待建立狀態。`;
+  showWarnModal({
+    icon:info.hasSaved?'🕘':'📭',
+    title:'班表存檔紀錄',
+    msg,
+    buttons:[{label:'知道了', primary:true}]
+  });
+};
 function initCurrentMonthDefaults(){
   const now=new Date();
   const y=now.getFullYear();
@@ -1920,6 +1946,7 @@ window.generateSchedule=async(opts={})=>{
 
 function renderSchedTable(y,m,days,sched,all,hmap,pubShifts={},prevStreaks={},lockedCells={},savedAt=null){
   schedState={y,m,days,sched,all,hmap,pubShifts,prevStreaks,lockedCells:normalizeLockedCells(lockedCells),savedAt};
+  setLastScheduleRecordInfo({y,m,savedAt:savedAt||null,hasSaved:!!savedAt});
   const out=document.getElementById('schedOut'); out.innerHTML='';
   // 用當月發布的班別指派計算人數（更準確）
   const sc={D:0,E:0,N:0,EN:0};
@@ -2482,9 +2509,14 @@ window.exportScheduleExcel = async function(){
       totalOffCell.alignment=align(); totalOffCell.border=border();
 
       // 記錄此人列號供統計列公式使用
+      // 彈性班需同時納入 E / N 的公式來源，才能依當日實際班別被正確 COUNTIF
       const effSh3=schedState?.pubShifts?.[s.name]||s.shift;
-      const shKey3=Array.isArray(effSh3)||effSh3==='EN'?'E':effSh3;
-      if(shiftRows[shKey3]) shiftRows[shKey3].push(curRow);
+      if(Array.isArray(effSh3) || effSh3==='EN'){
+        shiftRows.E.push(curRow);
+        shiftRows.N.push(curRow);
+      }else if(shiftRows[effSh3]){
+        shiftRows[effSh3].push(curRow);
+      }
 
       curRow++;
     });
@@ -2897,6 +2929,17 @@ window.loadMySchedule=async function(){
 let schedState = null; // { y, m, days, sched, all, hmap, pubShifts }
 let editTarget = null; // { name, day0, cellEl, wkEl, offEl }
 let editHistory = []; // undo history (max 50 steps)
+let lastScheduleRecordInfo = null; // { y, m, savedAt, hasSaved }
+
+function renderScheduleEmptyState(title, detail=''){
+  const out=document.getElementById('schedOut');
+  if(!out) return;
+  out.innerHTML=`<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">${title}</div>${detail?`<div style="font-size:12px;color:var(--text2)">${detail}</div>`:''}</div>`;
+}
+
+function setLastScheduleRecordInfo(info){
+  lastScheduleRecordInfo=info||null;
+}
 
 function normalizeLockedCells(lockedCells){
   const out={};
@@ -3328,7 +3371,11 @@ async function autoLoadSchedule(){
   if(schedState&&schedState.y===y&&schedState.m===m) return;
   try{
     const saved=await fbLoadSchedule(y,m);
-    if(!saved||!saved.schedule) return;
+    if(!saved||!saved.schedule){
+      setLastScheduleRecordInfo({y,m,savedAt:null,hasSaved:false});
+      renderScheduleEmptyState(`${y}年${m}月尚未有存檔班表`,'可按「自動排班」建立新的班表');
+      return;
+    }
     const sched=saved.schedule;
     const lockedCells=normalizeLockedCells(saved.lockedCells||{});
     const dIM=new Date(y,m,0).getDate();
@@ -3343,7 +3390,10 @@ async function autoLoadSchedule(){
     }catch(e){}
     renderSchedTable(y,m,dIM,sched,all,hmap,publishedShifts,prevStreaks,lockedCells,saved.publishedAt||null);
     toast(`已自動載入 ${y}年${m}月 儲存的班表`,'info');
-  }catch(e){}
+  }catch(e){
+    setLastScheduleRecordInfo({y,m,savedAt:null,hasSaved:false});
+    renderScheduleEmptyState('載入存檔班表失敗','請稍後再試，或重新產生班表');
+  }
 }
 
 // ── 上月連班設定 ──
