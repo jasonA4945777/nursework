@@ -1515,6 +1515,14 @@ window.generateSchedule=async(opts={})=>{
     const cv=getCov(d0);
     const candidates=n.allowed.filter(sh=>canWork(n,d0,sh));
     if(!candidates.length) return n.allowed[0];
+    if(candidates.includes('E') && candidates.includes('N')){
+      const nCur=cv.N||0;
+      const {minT:nMinT}=getShiftTargets(d0,'N');
+      // N 班只要補到不缺人即可；達 4 人以上時，彈性班優先排去 E
+      if(nCur>=4) return 'E';
+      if(nCur<=nMinT) return 'N';
+      return 'E';
+    }
     const scored=candidates.map(sh=>{
       const {minT,maxT}=getShiftTargets(d0,sh);
       const cur=cv[sh]||0;
