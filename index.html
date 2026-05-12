@@ -1518,9 +1518,9 @@ window.generateSchedule=async(opts={})=>{
     if(candidates.includes('E') && candidates.includes('N')){
       const nCur=cv.N||0;
       const {minT:nMinT}=getShiftTargets(d0,'N');
-      // N 班只要補到不缺人即可；達 4 人以上時，彈性班優先排去 E
-      if(nCur>=4) return 'E';
-      if(nCur<=nMinT) return 'N';
+      // N 班維持 3 人即可；到 3 人後彈性班優先回補 E
+      if(nCur>=3) return 'E';
+      if(nCur<nMinT) return 'N';
       return 'E';
     }
     const scored=candidates.map(sh=>{
@@ -1775,7 +1775,6 @@ window.generateSchedule=async(opts={})=>{
   }
 
   // 跑5次，選最優
-  toast('正在最佳化排班（跑5次取最優）…','info');
   let bestResult=null;
   for(let run=0;run<5;run++){
     const result=runOnce(run*7+13);
@@ -1867,7 +1866,6 @@ window.generateSchedule=async(opts={})=>{
   const offSummary=nurses.map(n=>`${n.name}:${n.offCnt}`);
   const minOff=Math.min(...nurses.filter(n=>!n.ia).map(n=>n.offCnt));
   const maxOff=Math.max(...nurses.filter(n=>!n.ia).map(n=>n.offCnt));
-  toast(`排班完成 ｜ OFF目標:${OFF_GOAL}天 ｜ 實際範圍:${minOff}~${maxOff}天`,'success');
 
   renderSchedTable(y,m,dIM,sched,all,hmap,publishedShifts,prevStreaks,preservedLocks,schedState?.savedAt||null);
 
