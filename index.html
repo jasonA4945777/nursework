@@ -1502,6 +1502,29 @@ window.generateSchedule=async(opts={})=>{
     if(ns>MAX_CONSEC) return false;
     return true;
   }
+  function getShiftTargets(d0,sh){
+    const req=dayReqMap[`${d0}_${sh}`]||{};
+    const isSat=new Date(y,m-1,d0+1).getDay()===6;
+    return {
+      maxT:req.max??(sh==='D'?MAX_D:sh==='E'?(isSat?4:MAX_E):N_COUNT),
+      minT:req.min??(sh==='D'?MIN_D:sh==='E'?MIN_E:N_COUNT)
+    };
+  }
+  function pickShiftForDay(n,d0){
+    if(!n.isFlex) return n.allowed[0];
+    const cv=getCov(d0);
+    const candidates=n.allowed.filter(sh=>canWork(n,d0,sh));
+    if(!candidates.length) return n.allowed[0];
+    const scored=candidates.map(sh=>{
+      const {minT,maxT}=getShiftTargets(d0,sh);
+      const cur=cv[sh]||0;
+      const shortage=Math.max(0,minT-cur);
+      const spare=Math.max(0,maxT-cur);
+      const priority=(sh==='N'?1000:0)+(shortage*100)+(spare*10);
+      return {sh,priority};
+    }).sort((a,b)=>b.priority-a.priority);
+    return scored[0].sh;
+  }
 
   // ── IDS 連續天前後OFF統一處理 ──
   // 只在 IDS 序列的第一天前一天 和 最後一天後一天 設 OFF
@@ -1676,7 +1699,7 @@ window.generateSchedule=async(opts={})=>{
 
       undecided.forEach(n=>{
         if(n.ia!==null&&d0>=n.ia){set(n,d0,'OFF');return;}
-        const sh=n.allowed[0];
+        const sh=pickShiftForDay(n,d0);
 
         // 無法上班（連班切換規則）
         if(!canWork(n,d0,sh)){
@@ -1685,10 +1708,7 @@ window.generateSchedule=async(opts={})=>{
           return;
         }
 
-        const req=dayReqMap[`${d0}_${sh}`]||{};
-        const isSat=new Date(y,m-1,d0+1).getDay()===6;
-        const maxT=req.max??(sh==='D'?MAX_D:sh==='E'?(isSat?4:MAX_E):N_COUNT);
-        const minT=req.min??(sh==='D'?MIN_D:sh==='E'?MIN_E:N_COUNT);
+        const {maxT,minT}=getShiftTargets(d0,sh);
         const cv=getCov(d0);
         const cur=cv[sh]||0;
         const remain=dIM-d0;
