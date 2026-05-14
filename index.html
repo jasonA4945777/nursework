@@ -2254,6 +2254,14 @@ window.exportScheduleExcel = async function(){
   if(!schedState){ toast('請先排班','error'); return; }
   const {y,m,days,sched,all} = schedState;
   const dIM=days;
+  const renderedValueMap={};
+  document.querySelectorAll('#schedOut .cell.editable[data-name][data-day]').forEach(cell=>{
+    const name=cell.dataset.name;
+    const day=Number(cell.dataset.day);
+    if(!name||Number.isNaN(day)) return;
+    if(!renderedValueMap[name]) renderedValueMap[name]={};
+    renderedValueMap[name][day]=cell.textContent?.trim()||'';
+  });
 
   if(!window.ExcelJS){
     await new Promise((res,rej)=>{
@@ -2467,7 +2475,8 @@ window.exportScheduleExcel = async function(){
         const isHol=natHolidays.has(d);
         const isMid=midlineCol!==null&&d===midlineCol;
         const cell=ws.getCell(curRow,d+3);
-        const displayV=idsDays.has(d)?'IDS':o2Days.has(d)?'O2':pubOffDays.has(d)?'O2':v;
+        const renderedV=renderedValueMap[s.name]?.[d];
+        const displayV=renderedV|| (idsDays.has(d)?'IDS':o2Days.has(d)?'O2':pubOffDays.has(d)?'O2':v);
         cell.value=displayV;
         cell.border=border(isMid);
         cell.alignment=align();
@@ -2508,7 +2517,8 @@ window.exportScheduleExcel = async function(){
       let holOffXlsx=0;
       for(let d=0;d<dIM;d++){
         const v=r[d]||'OFF';
-        const displayV=idsDays.has(d)?'IDS':o2Days.has(d)?'O2':pubOffDays.has(d)?'O2':v;
+        const renderedV=renderedValueMap[s.name]?.[d];
+        const displayV=renderedV|| (idsDays.has(d)?'IDS':o2Days.has(d)?'O2':pubOffDays.has(d)?'O2':v);
         if(displayV==='OFF'){
           const dt=new Date(y,m-1,d+1),wd=dt.getDay();
           if(wd===0||wd===6||natHolidays.has(d)) holOffXlsx++;
