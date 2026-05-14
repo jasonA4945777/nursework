@@ -2433,6 +2433,17 @@ window.exportScheduleExcel = async function(){
       ws.getRow(curRow).height=14;
       const r=sched[s.name]||[];
       const preoffs=preoffMap[s.name];
+      const allOffs=all[s.name]||[];
+      const o2Days=new Set(allOffs.filter(o=>/02/.test(o.note||'')).map(o=>o.day));
+      const idsDays=new Set(allOffs.filter(o=>/IDS|ids/.test(o.note||'')).map(o=>o.day));
+      const pubOffDays=new Set(allOffs.filter(o=>/上課|支援|公假|出勤/.test(o.note||'')).map(o=>o.day));
+      specialRules.forEach(rule=>{
+        if(!rule.name||rule.name!==s.name||!rule.day) return;
+        const rd=Number(rule.day)-1;
+        if(rd<0||rd>=dIM) return;
+        if(rule.type==='ids') idsDays.add(rd);
+        else if(rule.type==='o2') o2Days.add(rd);
+      });
 
       // 姓名
       const nameCell=ws.getCell(curRow,1);
@@ -2456,27 +2467,34 @@ window.exportScheduleExcel = async function(){
         const isHol=natHolidays.has(d);
         const isMid=midlineCol!==null&&d===midlineCol;
         const cell=ws.getCell(curRow,d+3);
-        cell.value=v;
+        const displayV=idsDays.has(d)?'IDS':o2Days.has(d)?'O2':pubOffDays.has(d)?'O2':v;
+        cell.value=displayV;
         cell.border=border(isMid);
         cell.alignment=align();
         if(isPreoff){
           // 預假：黃色
           cell.fill=fill(C.PREOFF);
           cell.font=font(8,true,'856404');
-        } else if(v==='D'){
+        } else if(displayV==='D'){
           cell.fill=fill(C.D);
           cell.font=font(8,true,'16A34A');
-        } else if(v==='E'){
+        } else if(displayV==='E'){
           cell.fill=fill(C.E);
           cell.font=font(8,true,'D97706');
-        } else if(v==='N'){
+        } else if(displayV==='N'){
           cell.fill=fill(C.N);
           cell.font=font(8,true,'7C3AED');
+        } else if(displayV==='O2'){
+          cell.fill=fill('FCE7F3');
+          cell.font=font(8,true,'BE185D');
+        } else if(displayV==='IDS'){
+          cell.fill=fill('FFF7ED');
+          cell.font=font(8,true,'C2410C');
         } else {
           cell.fill=fill(C.OFF);
           cell.font=font(6,false,'888888');
         }
-        if(v==='OFF') offCnt++; else workCnt++;
+        if(displayV==='OFF') offCnt++; else workCnt++;
       }
 
       // Excel 公式：用 COUNTIF 計算 OFF 天數
@@ -2490,7 +2508,8 @@ window.exportScheduleExcel = async function(){
       let holOffXlsx=0;
       for(let d=0;d<dIM;d++){
         const v=r[d]||'OFF';
-        if(v==='OFF'){
+        const displayV=idsDays.has(d)?'IDS':o2Days.has(d)?'O2':pubOffDays.has(d)?'O2':v;
+        if(displayV==='OFF'){
           const dt=new Date(y,m-1,d+1),wd=dt.getDay();
           if(wd===0||wd===6||natHolidays.has(d)) holOffXlsx++;
         }
