@@ -1839,34 +1839,6 @@ window.generateSchedule=async(opts={})=>{
     sched[n.name]=arr;
   });
 
-  // 統計 OFF 天數
-  // Debug：顯示原始預假資料和排班結果
-  {
-    const lines=[];
-    ['曹育慈','陳安琪'].forEach(name=>{
-      const n=nurses.find(x=>x.name===name);
-      if(!n){lines.push(name+': 找不到');return;}
-      let realOffCnt=0, forceOffCnt=0, otherOffCnt=0;
-      for(let d=0;d<dIM;d++){
-        if(n.A[d]==='OFF'){
-          if(n.realOff.has(d)) realOffCnt++;
-          else if(n.forceOff?.has(d)) forceOffCnt++;
-          else otherOffCnt++;
-        }
-      }
-      // 原始預假資料
-      const rawOffs=(all[name]||[]).map(o=>`${o.day+1}(${o.note||'無'})`).join(',');
-      lines.push(`${name}: 目標=${n.myGoal} 總OFF=${n.offCnt}`);
-      lines.push(`  預假OFF=${realOffCnt} 強制OFF=${forceOffCnt} 其他OFF=${otherOffCnt}`);
-      lines.push(`  原始預假: ${rawOffs}`);
-      lines.push(`  realOff天=${[...n.realOff].map(d=>d+1).join(',')}`);
-    });
-    alert('Debug\n'+lines.join('\n'));
-  }
-  const offSummary=nurses.map(n=>`${n.name}:${n.offCnt}`);
-  const minOff=Math.min(...nurses.filter(n=>!n.ia).map(n=>n.offCnt));
-  const maxOff=Math.max(...nurses.filter(n=>!n.ia).map(n=>n.offCnt));
-
   renderSchedTable(y,m,dIM,sched,all,hmap,publishedShifts,prevStreaks,preservedLocks,schedState?.savedAt||null);
 
   try{
@@ -3557,6 +3529,15 @@ window.handleWarnBtn=function(i){
 // ── Helpers ──
 function loader(v){document.getElementById('loader').style.display=v?'flex':'none';}
 let toastTmr;
+const nativeAlert=window.alert.bind(window);
+window.alert=function(message){
+  const text=typeof message==='string'?message:String(message??'');
+  if(/^Debug\b/i.test(text)){
+    console.debug('Blocked debug alert:', text);
+    return;
+  }
+  nativeAlert(text);
+};
 function toast(msg,type='success'){const t=document.getElementById('toast');t.textContent=msg;t.className=`toast ${type} show`;clearTimeout(toastTmr);toastTmr=setTimeout(()=>t.classList.remove('show'),3000);}
 
 // ── 計算月底連班天數（儲存到 Firebase 供下個月使用）──
