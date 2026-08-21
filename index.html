@@ -151,6 +151,11 @@ header{background:var(--white);border-bottom:1px solid var(--border);padding:0 2
 .daily-full-announcement{display:none;margin-bottom:14px;padding:12px 15px;border-radius:11px;border:1.5px solid #bfdbfe;background:#eff6ff;color:#1d4ed8;font-size:12px;line-height:1.7}
 .daily-full-announcement.show{display:block}
 .daily-full-announcement-title{font-size:13px;font-weight:700;margin-bottom:4px}
+.flex-reason-notice{display:none;margin-bottom:14px;padding:12px 15px;border-radius:11px;border:1.5px solid #fdba74;background:#fff7ed;color:#9a3412;font-size:12px;line-height:1.7}
+.flex-reason-notice.show{display:block}
+.flex-reason-notice-title{font-size:13px;font-weight:700;margin-bottom:4px}
+.flex-reason-notice-item{cursor:pointer;text-decoration:underline dotted;display:inline-block;margin-right:4px}
+.flex-reason-notice-item:hover{color:#c2410c}
 .approval-bar{display:none;margin-top:12px;padding:12px 14px;border-radius:10px;border:1px solid #fdba74;background:#fff7ed;color:#9a3412;font-size:12px;line-height:1.55}
 .approval-bar.show{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .approval-bar.pending{background:#fef3c7;border-color:#f59e0b;color:#92400e}
@@ -494,6 +499,7 @@ thead th.col-prev{background:#f8f9ff;font-size:9px;color:var(--text2);position:s
         </div>
       </div>
       <div class="daily-full-announcement" id="dailyFullAnnouncement"></div>
+      <div class="flex-reason-notice" id="flexReasonNotice"></div>
       <div class="daily-limit-notice" id="dailyLimitNotice"></div>
       <div class="cal-card">
         <div class="cal-top">
@@ -1090,6 +1096,23 @@ function renderDailyFullAnnouncement(y,m){
   notice.innerHTML=`<div class="daily-full-announcement-title">📢 公告：以下日期預假已額滿（每日最多 ${DAILY_OFF_MAX} 人），無法再新增</div>`+
     fullDays.map(([day,applicants])=>`<div><b>${m}/${day+1}</b>：${escapeHtml(applicants.map(item=>item.name).join('、'))}</div>`).join('');
 }
+// 提醒：因 OFF_MAX 調整而被動變成彈性預假、但當初存檔時還不用填原因的日期，尚未補填原因
+function renderFlexReasonNotice(y,m,myDaysList){
+  const notice=document.getElementById('flexReasonNotice');
+  if(!notice) return;
+  const excessDays=getExcessDaySet(myDaysList);
+  const missing=myDaysList
+    .filter(o=>excessDays.has(o.day)&&!getFlexReason(o))
+    .sort((a,b)=>a.day-b.day);
+  if(!missing.length){ notice.className='flex-reason-notice'; notice.innerHTML=''; return; }
+  notice.className='flex-reason-notice show';
+  notice.innerHTML=`<div class="flex-reason-notice-title">⚠️ 你有 ${missing.length} 天預假因規則調整已變成彈性預假，尚未填寫原因，請點選下方日期補充</div>`+
+    missing.map(o=>`<span class="flex-reason-notice-item" onclick="openFlexReasonDay(${o.day},${y},${m})">${m}/${o.day+1}</span>`).join('、');
+}
+window.openFlexReasonDay=async function(d,y,m){
+  const hmap=await fetchHolidays(y);
+  openModal(d,y,m,hmap[dateKey(y,m,d+1)]);
+};
 function travelRegistryRef(y,m){ return doc(db,'travelReservations',`${y}_${m}`); }
 async function fbLoadTravelPlans(y,m){
   const snap=await getDoc(travelRegistryRef(y,m));
@@ -1653,6 +1676,7 @@ async function renderCal(y,m){
   const days=new Date(y,m,0).getDate(), first=new Date(y,m-1,1).getDay();
   const hmap = await fetchHolidays(y);
   const excessDays=getExcessDaySet(myDays);
+  renderFlexReasonNotice(y,m,myDays);
   document.getElementById('calTitle').textContent=`${y}年${m}月`;
   const locked=isLeaveLocked(y,m);
   const lockBanner=document.getElementById('calLockBanner');
