@@ -1352,6 +1352,7 @@ window.renderStaffTable = function renderStaffTable(){
       <div class="st-shift" style="color:${isEN?'#7c3aed':s.shift==='D'?'var(--D)':s.shift==='E'?'var(--E)':'var(--N)'}">
         ${isEN?'<span style="background:#ede9fe;color:#7c3aed;border-radius:6px;padding:2px 8px;font-size:12px;font-weight:700">⚡ 彈性 E+N</span>':shiftName}
       </div>
+      <button class="st-del" onclick="showEditStaffShiftModal('${s.name}')" title="編輯預設班別" style="background:none;color:#94a3b8">✏️</button>
       <button class="st-del" onclick="deleteStaffMember('${s.name}')" title="移除">✕</button>`;
     tbl.appendChild(row);
   });
@@ -4040,6 +4041,62 @@ window.doAddStaff = function(){
   const m=+document.getElementById('smMonth')?.value||new Date().getMonth()+1;
   _loadShiftGrid(y,m);
   toast(`已新增 ${name}（${shift}班），登入選單已更新`,'success');
+};
+
+// 編輯既有人員的「全域預設班別」（例如修正舊資料被誤寫的班別）
+window.showEditStaffShiftModal = function(name){
+  const s=STAFF.find(x=>x.name===name);
+  if(!s) return;
+  const curShift=normalizeShiftValue(s.shift);
+  const curVal=Array.isArray(curShift)?'EN':curShift;
+  document.getElementById('warnModalIcon').textContent='✏️';
+  document.getElementById('warnModalTitle').textContent=`編輯「${name}」的預設班別`;
+  document.getElementById('warnModalMsg').innerHTML=`
+    <div style="text-align:left;margin-bottom:6px;font-size:12px;color:#64748b">
+      這是人員的「全域」預設班別，會在還沒為特定月份設定班別時作為預設值使用；不會更動已經發布過的月份。
+    </div>
+    <div style="text-align:left">
+      <label style="font-size:12px;color:#64748b;display:block;margin-bottom:4px">預設班別</label>
+      <select id="editStaffShiftInput"
+        style="width:100%;padding:10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px">
+        <option value="D" ${curVal==='D'?'selected':''}>D 白班</option>
+        <option value="E" ${curVal==='E'?'selected':''}>E 小夜</option>
+        <option value="N" ${curVal==='N'?'selected':''}>N 大夜</option>
+        <option value="EN" ${curVal==='EN'?'selected':''}>⚡ 彈性 E+N</option>
+      </select>
+    </div>`;
+  document.getElementById('warnModalBtns').innerHTML=`
+    <button onclick="doEditStaffShift('${name}')"
+      style="padding:12px;border-radius:10px;border:none;font-size:14px;font-weight:600;cursor:pointer;width:100%;background:#2563eb;color:#fff">
+      確認修改
+    </button>
+    <button onclick="document.getElementById('warnModal').style.display='none'"
+      style="padding:12px;border-radius:10px;border:none;font-size:14px;font-weight:600;cursor:pointer;width:100%;background:#f1f5f9;color:#374151">
+      取消
+    </button>`;
+  window._warnBtns=[];
+  document.getElementById('warnModal').style.display='flex';
+};
+window.doEditStaffShift = async function(name){
+  const newShift=document.getElementById('editStaffShiftInput')?.value||'D';
+  const idx=STAFF.findIndex(x=>x.name===name);
+  if(idx<0) return;
+  const prev=STAFF[idx];
+  STAFF[idx]={...prev,shift:newShift};
+  document.getElementById('warnModal').style.display='none';
+  loader(true);
+  try{
+    await fbSaveStaff(STAFF);
+    loader(false);
+    renderStaffTable();
+    initSelect();
+    loadShiftAssignGrid();
+    toast(`已將「${name}」的全域預設班別改為 ${newShift==='EN'?'⚡ 彈性 E+N':newShift+'班'} ✓`,'success');
+  }catch(e){
+    STAFF[idx]=prev;
+    loader(false);
+    toast('修改失敗，請稍後再試','error');
+  }
 };
 
 window.removeFromGrid = function(name){
