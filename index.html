@@ -776,6 +776,9 @@ const TRAVEL_OVERLAP_MAX = 2;
 const SPECIAL_OFF_NOTE_RE = /上課|支援|公假|出勤|IDS|02/i;
 const MIN_STAFF = { D:6, E:4, N:3 };
 const MIN_STAFF_TOTAL = MIN_STAFF.D + MIN_STAFF.E + MIN_STAFF.N;
+// 班別值統一正規化：STAFF/舊資料常見的字串 'EN' 代表「彈性 E+N」，必須轉成陣列 ['E','N']
+// 才能讓後續的 Array.isArray(eff) 判斷正確運作；否則會被當成一個不存在的班別 'EN' 直接寫進班表。
+function normalizeShiftValue(v){ return v==='EN'?['E','N']:v; }
 const LEAVE_LOCK_DAY = 10; // 例如：7 月預假需在 6/10 前送出，6/11 起鎖定
 const manualLeaveLocks = new Map();
 function leaveLockKey(y,m){ return `${y}_${m}`; }
@@ -2240,10 +2243,10 @@ window.generateSchedule=async(opts={})=>{
   // 工具
   // ══════════════════════════════════════
   function getShift(name){
-    const pub=publishedShifts[name]; if(pub) return pub;
+    const pub=publishedShifts[name]; if(pub) return normalizeShiftValue(pub);
     const s=staffConfig.find(x=>x.name===name)||STAFF.find(x=>x.name===name);
     if(!s) return 'D';
-    return s.shift==='EN'?['E','N']:s.shift;
+    return normalizeShiftValue(s.shift);
   }
   function getIA(name){
     const s=staffConfig.find(x=>x.name===name);
@@ -3910,8 +3913,10 @@ async function _loadShiftGrid(y, m){
     console.error('_loadShiftGrid failed to load published shifts:', { year:y, month:m, error:errorDetails(e) });
   }
   // Init pendingShifts from published or STAFF default
+  // 注意：pub[name] 或 s.shift 都可能是字串 'EN'，一定要正規化成 ['E','N']，
+  // 否則之後發布/排班時 'EN' 會被當成一個不存在的班別直接寫進班表格子。
   pendingShifts={};
-  STAFF.forEach(s=>{ pendingShifts[s.name]=pub[s.name]||s.shift; }); // pub[name] may be array for flex
+  STAFF.forEach(s=>{ pendingShifts[s.name]=normalizeShiftValue(pub[s.name]||s.shift); }); // pub[name] may be array for flex
   // Status
   const statusEl=document.getElementById('publishStatus');
   if(pubData){
@@ -3929,7 +3934,7 @@ async function _loadShiftGrid(y, m){
       const row=document.createElement('div');
       row.className='shift-row'; row.dataset.name=s.name;
       row.draggable=true;
-      const defaultShift=s.shift==='EN'?['E','N']:s.shift;
+      const defaultShift=normalizeShiftValue(s.shift);
       const cur=pendingShifts[s.name]||defaultShift;
       const curArr=Array.isArray(cur)?cur:[cur];
       const isFlex=curArr.length>1;
@@ -4027,7 +4032,7 @@ window.doAddStaff = function(){
     toast(`${name} 已在名單中`,'error');return;
   }
   STAFF.push({name,shift});
-  pendingShifts[name]=shift==='EN'?['E','N']:shift;
+  pendingShifts[name]=normalizeShiftValue(shift);
   fbSaveStaff(STAFF);
   initSelect(); // 更新登入下拉選單
   document.getElementById('warnModal').style.display='none';
