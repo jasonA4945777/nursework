@@ -500,24 +500,24 @@ thead th.col-prev{background:#f8f9ff;font-size:9px;color:var(--text2);position:s
           <div class="cal-legend">
             <div class="leg-item"><div class="leg-dot leg-holiday"></div>國定假日</div>
             <div class="leg-item"><div class="leg-dot leg-makeup"></div>補班日</div>
-            <div class="leg-item"><div class="leg-dot leg-off"></div>必要預假（最多 5 天）</div>
+            <div class="leg-item"><div class="leg-dot leg-off"></div>必要預假（最多 4 天）</div>
             <div class="leg-item"><div class="leg-dot" style="background:#f97316"></div>彈性預假</div>
             <div class="leg-item"><div class="leg-dot" style="background:#0ea5e9"></div>出國預假</div>
           </div>
         </div>
-        <div class="cal-hint">前 5 天為一定要放的必要預假；第 6 天起為彈性預假，排得出來才會給，且原因必填。</div>
+        <div class="cal-hint">前 4 天為一定要放的必要預假；第 5 天起為彈性預假，排得出來才會給，且原因必填。</div>
         <div class="cal-lock-banner" id="calLockBanner" style="display:none"></div>
         <div class="cal-loading" id="calLoading">⏳ 載入假日資料中…</div>
         <div class="cal-grid" id="calGrid"></div>
         <div class="off-bar">
-          <div class="count-pill" id="countPill">必要 0 / 5 天</div>
+          <div class="count-pill" id="countPill">必要 0 / 4 天</div>
           <div class="saved-msg" id="savedMsg">✓ 已儲存至雲端</div>
         </div>
         <div class="travel-card" id="travelCard">
           <div class="travel-head">
             <div>
               <div class="travel-title">✈️ 出國預假</div>
-              <div class="travel-sub">登記後整段會自動加入預假：預假總數依登記順序取前 5 天為必要預假，超出的列為彈性預假；出國區間不受 5 天登記上限。共同連續重疊 4 天時最多 2 位。</div>
+              <div class="travel-sub">登記後整段會自動加入預假：預假總數依登記順序取前 4 天為必要預假，超出的列為彈性預假；出國區間不受 4 天登記上限。共同連續重疊 4 天時最多 2 位。</div>
             </div>
           </div>
           <div class="travel-form">
@@ -685,7 +685,7 @@ thead th.col-prev{background:#f8f9ff;font-size:9px;color:var(--text2);position:s
   <div class="modal-box">
     <div class="modal-title" id="noteTitle">—</div>
     <div class="modal-holiday" id="noteHoliday" style="display:none"></div>
-    <div class="modal-sub" id="noteHelp">前 5 天可輸入備註，彈性預假則必須填寫原因。</div>
+    <div class="modal-sub" id="noteHelp">前 4 天可輸入備註，彈性預假則必須填寫原因。</div>
     <textarea class="modal-textarea" id="noteInput" placeholder="備註（選填）"></textarea>
     <div class="modal-footer">
       <button class="btn btn-danger btn-sm" id="noteRemoveBtn" onclick="removeDay()">移除</button>
@@ -769,8 +769,8 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 const ADMIN_PWD = '2026N13';
-const OFF_MAX = 5;
-const DAILY_OFF_MAX = 5;
+const OFF_MAX = 4; // 每人必要預假上限（天），第 OFF_MAX+1 天起為彈性預假
+const DAILY_OFF_MAX = 5; // 每天最多可預假人數，第 DAILY_OFF_MAX+1 人起鎖定不可再選
 const TRAVEL_OVERLAP_DAYS = 4;
 const TRAVEL_OVERLAP_MAX = 2;
 const SPECIAL_OFF_NOTE_RE = /上課|支援|公假|出勤|IDS|02/i;
