@@ -144,6 +144,12 @@ header{background:var(--white);border-bottom:1px solid var(--border);padding:0 2
 .daily-limit-notice{display:none;margin-bottom:14px;padding:13px 15px;border-radius:11px;border:1.5px solid #fca5a5;background:#fef2f2;color:#991b1b;font-size:12px;line-height:1.65}
 .daily-limit-notice.show{display:block}.daily-limit-notice-title{font-size:14px;font-weight:700;margin-bottom:4px}.daily-limit-notice-item{margin-top:3px}
 .cal-day.daily-overflow{box-shadow:0 0 0 3px rgba(220,38,38,.35);border-color:#dc2626!important}.daily-overflow-mark{font-family:'Noto Sans TC',sans-serif;font-size:8px;font-weight:700;color:#fff;background:#dc2626;border-radius:5px;padding:1px 4px}
+.cal-day.full-locked{cursor:not-allowed;opacity:.55;background:#f1f5f9!important}
+.cal-day.full-locked:hover{border-color:inherit;color:inherit;background:#f1f5f9!important}
+.full-locked-mark{font-family:'Noto Sans TC',sans-serif;font-size:7px;font-weight:700;color:#fff;background:#64748b;border-radius:5px;padding:1px 3px}
+.daily-full-announcement{display:none;margin-bottom:14px;padding:12px 15px;border-radius:11px;border:1.5px solid #bfdbfe;background:#eff6ff;color:#1d4ed8;font-size:12px;line-height:1.7}
+.daily-full-announcement.show{display:block}
+.daily-full-announcement-title{font-size:13px;font-weight:700;margin-bottom:4px}
 .approval-bar{display:none;margin-top:12px;padding:12px 14px;border-radius:10px;border:1px solid #fdba74;background:#fff7ed;color:#9a3412;font-size:12px;line-height:1.55}
 .approval-bar.show{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .approval-bar.pending{background:#fef3c7;border-color:#f59e0b;color:#92400e}
@@ -486,6 +492,7 @@ thead th.col-prev{background:#f8f9ff;font-size:9px;color:var(--text2);position:s
           </select>
         </div>
       </div>
+      <div class="daily-full-announcement" id="dailyFullAnnouncement"></div>
       <div class="daily-limit-notice" id="dailyLimitNotice"></div>
       <div class="cal-card">
         <div class="cal-top">
@@ -768,6 +775,7 @@ const TRAVEL_OVERLAP_DAYS = 4;
 const TRAVEL_OVERLAP_MAX = 2;
 const SPECIAL_OFF_NOTE_RE = /上課|支援|公假|出勤|IDS|02/i;
 const MIN_STAFF = { D:6, E:4, N:3 };
+const MIN_STAFF_TOTAL = MIN_STAFF.D + MIN_STAFF.E + MIN_STAFF.N;
 const LEAVE_LOCK_DAY = 10; // 例如：7 月預假需在 6/10 前送出，6/11 起鎖定
 const manualLeaveLocks = new Map();
 function leaveLockKey(y,m){ return `${y}_${m}`; }
@@ -877,6 +885,7 @@ let STAFF = [...DEFAULT_STAFF];
 let latestPubShifts = {}; // 最新發布的班別（用於登入下拉）
 
 let me = null, myDays = [], myTravelRanges = [], travelPlansCache = [], myDailyLimitConflicts = new Map(), modalDay = null;
+let monthDailyFull = new Map(); // 目前檢視月份中，已達每日預假上限（DAILY_OFF_MAX 人）的日期 → 申請人清單
 // holidayMap[y] = { "YYYY-MM-DD": { name, isHoliday, isMakeup } }
 const holidayCache = {};
 
@@ -1053,6 +1062,28 @@ async function refreshMyDailyLimitNotices(y,m){
   myDailyLimitConflicts=new Map();
   findUserDailyLimitConflicts(me.name,requests,y,m).forEach(item=>myDailyLimitConflicts.set(item.day,item));
   renderDailyLimitNotice(y,m);
+  monthDailyFull=computeMonthDailyFull(requests,y,m);
+  renderDailyFullAnnouncement(y,m);
+}
+// 統計某月哪些日期已達每日預假上限（DAILY_OFF_MAX 人），回傳 day → 申請人清單
+function computeMonthDailyFull(requests,y,m){
+  const full=new Map();
+  const daysInMonth=new Date(y,m,0).getDate();
+  for(let day=0;day<daysInMonth;day++){
+    const applicants=dailyOffApplicants(requests,day);
+    if(applicants.length>=DAILY_OFF_MAX) full.set(day,applicants);
+  }
+  return full;
+}
+// 公告：提醒所有人本月哪些日期預假已額滿，避免大家白排隊申請
+function renderDailyFullAnnouncement(y,m){
+  const notice=document.getElementById('dailyFullAnnouncement');
+  if(!notice) return;
+  const fullDays=[...monthDailyFull.entries()].sort((a,b)=>a[0]-b[0]);
+  if(!fullDays.length){ notice.className='daily-full-announcement'; notice.innerHTML=''; return; }
+  notice.className='daily-full-announcement show';
+  notice.innerHTML=`<div class="daily-full-announcement-title">📢 公告：以下日期預假已額滿（每日最多 ${DAILY_OFF_MAX} 人），無法再新增</div>`+
+    fullDays.map(([day,applicants])=>`<div><b>${m}/${day+1}</b>：${escapeHtml(applicants.map(item=>item.name).join('、'))}</div>`).join('');
 }
 function travelRegistryRef(y,m){ return doc(db,'travelReservations',`${y}_${m}`); }
 async function fbLoadTravelPlans(y,m){
@@ -1452,7 +1483,7 @@ async function enterApp(){
   renderAllReq();
 }
 window.logout=()=>{
-  me=null;myDays=[];myTravelRanges=[];travelPlansCache=[];myDailyLimitConflicts=new Map();schedState=null;editHistory=[];editTarget=null;
+  me=null;myDays=[];myTravelRanges=[];travelPlansCache=[];myDailyLimitConflicts=new Map();monthDailyFull=new Map();schedState=null;editHistory=[];editTarget=null;
   document.getElementById('appScreen').classList.remove('active');
   document.getElementById('loginScreen').classList.add('active');
   document.getElementById('loginName').value='';
@@ -1580,8 +1611,10 @@ window.loadMyOff=async()=>{
   myTravelRanges=[];
   travelPlansCache=[];
   myDailyLimitConflicts=new Map();
+  monthDailyFull=new Map();
   const y=+document.getElementById('myYear').value, m=+document.getElementById('myMonth').value;
   renderDailyLimitNotice(y,m);
+  renderDailyFullAnnouncement(y,m);
   document.getElementById('calLoading').classList.add('show');
   try{
     const [request,travelPlans,,,allRequests]=await Promise.all([
@@ -1596,6 +1629,8 @@ window.loadMyOff=async()=>{
     travelPlansCache=travelPlans;
     findUserDailyLimitConflicts(me.name,allRequests,y,m).forEach(item=>myDailyLimitConflicts.set(item.day,item));
     renderDailyLimitNotice(y,m);
+    monthDailyFull=computeMonthDailyFull(allRequests,y,m);
+    renderDailyFullAnnouncement(y,m);
     if(myDailyLimitConflicts.size) toast(`你有 ${myDailyLimitConflicts.size} 天預假超過每日 ${DAILY_OFF_MAX} 人上限，請查看紅色通知`,'error');
   }catch(e){toast('載入失敗','error');}
   document.getElementById('calLoading').classList.remove('show');
@@ -1642,6 +1677,8 @@ async function renderCal(y,m){
     const hname=hinfo?.name||'';
     const travelNames=travelNamesForDay(d);
     const dailyConflict=myDailyLimitConflicts.get(d);
+    const fullApplicants=monthDailyFull.get(d);
+    const isFullLocked=!entry&&!!fullApplicants; // 已達每日上限且非本人已選，鎖定不可再選
     let cls='cal-day';
     if(we) cls+=' we';
     if(isHoliday) cls+=' holiday';
@@ -1650,6 +1687,7 @@ async function renderCal(y,m){
     if(entry?.note) cls+=' has-note';
     if(travelNames.length) cls+=' travel-busy';
     if(dailyConflict) cls+=' daily-overflow';
+    if(isFullLocked) cls+=' full-locked';
     let flexMark='';
     if(entry&&excessDays.has(d)){
       cls+=' flex-off';
@@ -1659,12 +1697,17 @@ async function renderCal(y,m){
     el.className=cls;
     const travelMark=travelNames.length?`<span class="travel-day-badge">✈ ${escapeHtml(travelNames.join('、'))}</span>`:'';
     const overflowMark=dailyConflict?'<span class="daily-overflow-mark">需改期</span>':'';
-    el.innerHTML=`<span class="day-num">${d+1}</span>${hname?`<span class="day-hname ${isHoliday?'h':isMakeup?'mk':''}">${hname}</span>`:''}${flexMark}${overflowMark}${travelMark}`;
+    const fullMark=isFullLocked?'<span class="full-locked-mark">已額滿</span>':'';
+    el.innerHTML=`<span class="day-num">${d+1}</span>${hname?`<span class="day-hname ${isHoliday?'h':isMakeup?'mk':''}">${hname}</span>`:''}${flexMark}${overflowMark}${fullMark}${travelMark}`;
     const reason=excessDays.has(d)?getFlexReason(entry):entry?.note||'';
-    el.title=hname+(reason?` · ${reason}`:'')+(travelNames.length?`${hname||reason?' · ':''}出國：${travelNames.join('、')}`:'')+(dailyConflict?` · 超過每日 ${DAILY_OFF_MAX} 人上限，請改期`:'' );
+    el.title=hname+(reason?` · ${reason}`:'')+(travelNames.length?`${hname||reason?' · ':''}出國：${travelNames.join('、')}`:'')+(dailyConflict?` · 超過每日 ${DAILY_OFF_MAX} 人上限，請改期`:'')+(isFullLocked?` · 已額滿（${fullApplicants.map(item=>item.name).join('、')}），無法再選`:'');
     el.addEventListener('click',()=>{
       if(isLeaveLocked(y,m)){
         toast(getLeaveLockedMessage(y,m),'error');
+        return;
+      }
+      if(isFullLocked){
+        toast(`${m}/${d+1} 預假已額滿（${fullApplicants.map(item=>item.name).join('、')}），請改選其他日期`,'error');
         return;
       }
       if(myTravelRanges.some(r=>r.startDay<=d&&r.endDay>=d)){
@@ -1748,6 +1791,7 @@ window.saveNote=async()=>{
   try{
     await fbSaveWithDailyLimit(me.name,y,m,myDays,isNew?[d]:[]); closeModal(); loader(false);
     const msg=document.getElementById('savedMsg'); msg.classList.add('show'); setTimeout(()=>msg.classList.remove('show'),3000);
+    try{await refreshMyDailyLimitNotices(y,m);}catch(_){ }
     renderCal(y,m);
     toast(willBeFlex?'彈性預假已儲存，將視人力安排':'已儲存 ✓','success');
   }catch(e){
@@ -1771,8 +1815,13 @@ window.removeDay=async()=>{
   }
   myDays=myDays.filter(x=>x.day!==d);
   loader(true);
-  try{await fbSave(me.name,y,m,myDays);myDailyLimitConflicts.delete(d);renderDailyLimitNotice(y,m);closeModal();loader(false);renderCal(y,m);toast('已移除','success');}
-  catch(e){loader(false);toast('操作失敗','error');}
+  try{
+    await fbSave(me.name,y,m,myDays);
+    myDailyLimitConflicts.delete(d);
+    renderDailyLimitNotice(y,m);
+    try{await refreshMyDailyLimitNotices(y,m);}catch(_){ }
+    closeModal();loader(false);renderCal(y,m);toast('已移除','success');
+  }catch(e){loader(false);toast('操作失敗','error');}
 };
 
 window.saveTravelRange=async function(){
@@ -1899,236 +1948,6 @@ window.removeTravelRange=async function(encodedId){
   }
 };
 
-/* 已停用並移除操作入口：舊版護理長審核資料僅保留為歷史相容參考。
-window.openApprovalSubmitModal=function(){
-  const y=+document.getElementById('myYear').value;
-  const m=+document.getElementById('myMonth').value;
-  const realDays=getRealOffDays(myDays);
-  if(realDays.length<=OFF_MAX){toast('目前沒有需要審核的超額預假','error');return;}
-  const excess=getExcessDaySet(myDays);
-  const dates=realDays.filter(x=>excess.has(x.day)).map(x=>`${m}/${x.day+1}`).join('、');
-  document.getElementById('approvalSubmitSummary').textContent=
-    `${y}年${m}月共 ${realDays.length} 天，超額 ${realDays.length-OFF_MAX} 天：${dates}`;
-  document.getElementById('approvalReasonInput').value=myApproval?.reason||'';
-  document.getElementById('approvalSubmitModal').classList.add('show');
-};
-window.closeApprovalSubmitModal=function(){
-  document.getElementById('approvalSubmitModal').classList.remove('show');
-};
-window.submitExcessApproval=async function(){
-  const y=+document.getElementById('myYear').value;
-  const m=+document.getElementById('myMonth').value;
-  const reason=document.getElementById('approvalReasonInput').value.trim();
-  if(!reason){toast('請填寫超過 6 天的原因','error');return;}
-  if(await isLeaveLockedFresh(y,m)){toast('預假已截止，無法送出新申請','error');return;}
-  loader(true);
-  myApproval={
-    status:'pending',
-    reason,
-    fingerprint:approvalFingerprint(myDays),
-    submittedAt:new Date().toISOString(),
-    rejectReason:''
-  };
-  try{
-    await fbSave(me.name,y,m,myDays,myApproval);
-    closeApprovalSubmitModal();
-    loader(false);
-    renderCal(y,m);
-    toast('已送出，等待護理長於系統審核 ✓','success');
-  }catch(e){
-    console.error('submitExcessApproval failed',e);
-    myApproval={status:'draft',reason,fingerprint:approvalFingerprint(myDays),updatedAt:new Date().toISOString()};
-    try{await fbSave(me.name,y,m,myDays,myApproval);}catch(_){}
-    loader(false);
-    renderCal(y,m);
-    toast('審核申請送出失敗，請稍後再試','error');
-  }
-};
-
-// ── 護理長站內審核 ──
-let reviewRejectTarget=null;
-function reviewStatusLabel(status){
-  return status==='approved'?'已核准':
-    status==='rejected'?'未核准':
-    status==='pending'?'待審核':'未送審';
-}
-async function focusLatestPendingReview(){
-  try{
-    const snap=await getDocs(collection(db,'offRequests'));
-    const pending=[];
-    snap.forEach(d=>{
-      const request=d.data();
-      if(getRealOffDays(request.offDays||[]).length>OFF_MAX&&getApprovalStatus(request)==='pending'){
-        pending.push(request);
-      }
-    });
-    pending.sort((a,b)=>(b.approval?.submittedAt||'').localeCompare(a.approval?.submittedAt||''));
-    if(pending.length){
-      const target=pending[0];
-      const yearEl=document.getElementById('reviewYear');
-      if(![...yearEl.options].some(o=>+o.value===+target.year)){
-        yearEl.add(new Option(`${target.year}年`,target.year));
-      }
-      yearEl.value=target.year;
-      document.getElementById('reviewMonth').value=target.month;
-    }
-  }catch(e){
-    console.error('focusLatestPendingReview failed',e);
-  }
-  renderApprovalReview();
-}
-function getApprovalRisk(person,request,effectiveAll){
-  const excess=getExcessDaySet(request.offDays||[]);
-  const sameShift=STAFF.filter(s=>s.shift===person.shift);
-  const min=MIN_STAFF[person.shift]||3;
-  return getRealOffDays(request.offDays||[])
-    .filter(o=>excess.has(o.day))
-    .sort((a,b)=>a.day-b.day)
-    .map(o=>{
-      const currentlyOff=sameShift.filter(s=>(effectiveAll[s.name]||[]).some(x=>x.day===o.day)).length;
-      const alreadyIncluded=(effectiveAll[person.name]||[]).some(x=>x.day===o.day);
-      const working=sameShift.length-currentlyOff-(alreadyIncluded?0:1);
-      return {day:o.day,working,min,isLow:working<min};
-    });
-}
-window.renderApprovalReview=async function(){
-  if(!me||!me.isReviewer) return;
-  const y=+document.getElementById('reviewYear').value;
-  const m=+document.getElementById('reviewMonth').value;
-  const statusFilter=document.getElementById('reviewStatus').value;
-  const list=document.getElementById('reviewList');
-  const summary=document.getElementById('reviewSummary');
-  list.innerHTML='<div class="empty"><div class="empty-icon">⏳</div><div class="empty-text">載入審核資料中…</div></div>';
-  try{
-    const [requests,effectiveAll]=await Promise.all([fbLoadAllRequests(y,m),fbLoadAll(y,m)]);
-    const entries=STAFF.map(person=>({person,request:requests[person.name]}))
-      .filter(x=>getRealOffDays(x.request?.offDays||[]).length>OFF_MAX)
-      .map(x=>({...x,status:getApprovalStatus(x.request)}));
-    const counts={
-      pending:entries.filter(x=>x.status==='pending').length,
-      approved:entries.filter(x=>x.status==='approved').length,
-      rejected:entries.filter(x=>x.status==='rejected').length
-    };
-    summary.innerHTML=`
-      <div class="review-stat"><div class="stat-lbl">待審核</div><div class="number" style="color:#d97706">${counts.pending}</div></div>
-      <div class="review-stat"><div class="stat-lbl">已核准</div><div class="number" style="color:#16a34a">${counts.approved}</div></div>
-      <div class="review-stat"><div class="stat-lbl">未核准</div><div class="number" style="color:#dc2626">${counts.rejected}</div></div>`;
-    const visible=entries
-      .filter(x=>!statusFilter||x.status===statusFilter)
-      .sort((a,b)=>{
-        const order={pending:0,draft:1,rejected:2,approved:3};
-        return (order[a.status]??9)-(order[b.status]??9)||a.person.name.localeCompare(b.person.name,'zh-TW');
-      });
-    list.innerHTML='';
-    if(!visible.length){
-      list.innerHTML=`<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">${
-        statusFilter==='pending'?'目前沒有待審核的超額預假':'此條件沒有申請'
-      }</div></div>`;
-      return;
-    }
-    visible.forEach(({person,request,status})=>{
-      const realDays=getRealOffDays(request.offDays||[]).sort((a,b)=>a.day-b.day);
-      const excess=getExcessDaySet(request.offDays||[]);
-      const allDates=realDays.map(o=>`${m}/${o.day+1}`).join('、');
-      const extraDates=realDays.filter(o=>excess.has(o.day)).map(o=>`${m}/${o.day+1}`).join('、');
-      const risks=getApprovalRisk(person,request,effectiveAll);
-      const lowRisks=risks.filter(x=>x.isLow);
-      const riskHtml=lowRisks.length
-        ? `<div class="review-risk">⚠️ 核准後可能人力不足：${lowRisks.map(x=>`${m}/${x.day+1} 剩 ${x.working} 人（最低 ${x.min}）`).join('；')}</div>`
-        : '<div class="review-safe">✓ 依目前預假資料，超額日期未低於該班最低人力</div>';
-      const encodedName=encodeURIComponent(person.name);
-      const actions=status==='pending'
-        ? `<div class="review-actions">
-            <button class="btn btn-sm" style="background:#16a34a;color:#fff" onclick="approveReview('${encodedName}',${y},${m})">✅ 核准</button>
-            <button class="btn btn-danger btn-sm" onclick="openRejectReview('${encodedName}',${y},${m})">❌ 不核准</button>
-          </div>`:'';
-      const resultInfo=status==='rejected'&&request.approval?.rejectReason
-        ? `<div class="review-section" style="color:#b91c1c"><b>不核准原因：</b>${escapeHtml(request.approval.rejectReason)}</div>`:'';
-      const card=document.createElement('div');
-      card.className=`review-card ${status}`;
-      card.innerHTML=`
-        <div class="review-card-head">
-          <div><div class="review-person">${escapeHtml(person.name)} <span class="req-shift">${escapeHtml(person.shift)}班</span></div>
-          <div class="review-meta">${y}年${m}月・真正預假 ${realDays.length} 天・超額 ${realDays.length-OFF_MAX} 天</div></div>
-          <span class="approval-status ${status}">${reviewStatusLabel(status)}</span>
-        </div>
-        <div class="review-section"><div class="review-label">全部預假日期</div>${escapeHtml(allDates)}</div>
-        <div class="review-section"><div class="review-label">需要審核的超額日期</div><span style="color:#c2410c;font-weight:700">${escapeHtml(extraDates)}</span></div>
-        <div class="review-section"><div class="review-label">申請原因</div>${escapeHtml(request.approval?.reason||'未填寫')}</div>
-        ${riskHtml}${resultInfo}${actions}`;
-      list.appendChild(card);
-    });
-  }catch(e){
-    console.error('renderApprovalReview failed',e);
-    summary.innerHTML='';
-    list.innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-text">審核資料載入失敗</div></div>';
-  }
-};
-async function saveReviewDecision(encodedName,y,m,decision,rejectReason=''){
-  if(!me||!me.isReviewer){toast('沒有審核權限','error');return false;}
-  const name=decodeURIComponent(encodedName);
-  const request=await fbLoadRequest(name,y,m);
-  if(getApprovalStatus(request)!=='pending'){
-    toast('申請內容或狀態已變更，請重新整理','error');
-    return false;
-  }
-  const now=new Date().toISOString();
-  const approval={
-    ...(request.approval||{}),
-    status:decision,
-    rejectReason:decision==='rejected'?rejectReason:'',
-    reviewedBy:'護理長',
-    reviewedAt:now
-  };
-  await setDoc(doc(db,'offRequests',`${name}_${y}_${m}`),{approval,updatedAt:now},{merge:true});
-  await setDoc(doc(collection(db,'approvalAudit')),{
-    requestId:`${name}_${y}_${m}`,
-    name,year:y,month:m,decision,
-    rejectReason:decision==='rejected'?rejectReason:'',
-    reviewedBy:'護理長',
-    reviewedAt:now
-  });
-  return true;
-}
-window.approveReview=async function(encodedName,y,m){
-  const name=decodeURIComponent(encodedName);
-  if(!confirm(`確定核准「${name}」${y}年${m}月的超額預假嗎？`)) return;
-  loader(true);
-  try{
-    const saved=await saveReviewDecision(encodedName,y,m,'approved');
-    loader(false);
-    if(saved){toast(`已核准 ${name} 的超額預假 ✓`,'success');renderApprovalReview();}
-  }catch(e){loader(false);toast('核准失敗，請稍後再試','error');}
-};
-window.openRejectReview=function(encodedName,y,m){
-  reviewRejectTarget={encodedName,y,m};
-  document.getElementById('reviewRejectSummary').textContent=`${decodeURIComponent(encodedName)}・${y}年${m}月`;
-  document.getElementById('reviewRejectReason').value='';
-  document.getElementById('reviewRejectModal').classList.add('show');
-};
-window.closeReviewRejectModal=function(){
-  reviewRejectTarget=null;
-  document.getElementById('reviewRejectModal').classList.remove('show');
-};
-window.confirmRejectReview=async function(){
-  if(!reviewRejectTarget) return;
-  const reason=document.getElementById('reviewRejectReason').value.trim();
-  if(!reason){toast('請填寫不核准原因','error');return;}
-  const target={...reviewRejectTarget};
-  const name=decodeURIComponent(target.encodedName);
-  loader(true);
-  try{
-    const saved=await saveReviewDecision(target.encodedName,target.y,target.m,'rejected',reason);
-    loader(false);
-    if(saved){
-      closeReviewRejectModal();
-      toast(`已退回 ${name} 的超額預假`,'success');
-      renderApprovalReview();
-    }
-  }catch(e){loader(false);toast('退回失敗，請稍後再試','error');}
-};
-
-*/
 // ── All Requests ──
 function renderDailyOffStats(y,m,requests,hmap,shiftFilter=''){
   const root=document.getElementById('dailyOffStats');
@@ -2231,7 +2050,7 @@ window.renderAllReq=async()=>{
   if(!items.some(s=>s.offs.length||s.travels.length)){list.innerHTML='<div class="empty"><div class="empty-icon">📭</div><div class="empty-text">本月尚無申請</div></div>';return;}
   // ── 超過 OFF 目標的警示區塊 ──
   const totalStaff=STAFF.length;
-  const offGoal=Math.floor((totalStaff-13)*new Date(y,m,0).getDate()/totalStaff);
+  const offGoal=Math.floor((totalStaff-MIN_STAFF_TOTAL)*new Date(y,m,0).getDate()/totalStaff);
   const overLimit=items.filter(s=>{
     const realOffs=getRealOffDays(s.offs);
     return realOffs.length>offGoal;
@@ -2396,7 +2215,7 @@ window.generateSchedule=async(opts={})=>{
   const MIN_E=4, MAX_E=5;
   const N_COUNT=3;
   const totalStaff=STAFF.length;
-  const OFF_GOAL=Math.floor((totalStaff-13)*dIM/totalStaff);
+  const OFF_GOAL=Math.floor((totalStaff-MIN_STAFF_TOTAL)*dIM/totalStaff);
 
   // ── 各班 OFF 目標（方案B：E/N 共用彈性班 → 以「共池」推算可達 OFF）──
   // 用 getShift 取「當月生效班別」。輔助判斷：
@@ -2453,7 +2272,7 @@ window.generateSchedule=async(opts={})=>{
       const d=o.day; if(d<0||d>=dIM) return;
       const isIdsNote=!!(o.note&&/IDS|ids/.test(o.note));
       const isO2Note=!!(o.note&&/02/.test(o.note));
-      const isPub=!!(o.note&&/上課|支援|公假|出勤|IDS|ids|02/.test(o.note));
+      const isPub=!isRealOff(o);
       if(isPub) pubOff.add(d);
       else if(excessDays.has(d)) flexibleOff.add(d);
       else realOff.add(d);
@@ -3242,6 +3061,29 @@ function shiftBadgeHtml(eff){
   return `<span class="name-shift-badge ${cls}">${txt}</span>`;
 }
 
+// 計算「紅字OFF」：國定假日/例假日的OFF天數（renderSchedTable / undoEdit / _doApplyEdit / applySuggest 共用）
+function calcHolOff(r,y,m,days,hmap){
+  let holOff=0;
+  for(let d=0;d<days;d++){
+    const v=r[d]||'OFF';
+    if(!v||v==='OFF'){
+      const wd=new Date(y,m-1,d+1).getDay();
+      if(wd===0||wd===6||hmap?.[dateKey(y,m,d+1)]?.isHoliday) holOff++;
+    }
+  }
+  return holOff;
+}
+// 更新排班表某一列的「紅字OFF」「總OFF」欄位顯示
+function refreshOffColumns(tr,name,st){
+  if(!tr||!st) return;
+  const r=st.sched[name];
+  const off=r.filter(v=>!v||v==='OFF').length;
+  const totalOffEl=tr.querySelector('.col-totaloff');
+  const holOffEl=tr.querySelector('.col-holoff');
+  if(totalOffEl) totalOffEl.textContent=off;
+  if(holOffEl) holOffEl.textContent=calcHolOff(r,st.y,st.m,st.days,st.hmap);
+}
+
 function renderSchedTable(y,m,days,sched,all,hmap,pubShifts={},prevStreaks={},prevLastShifts={},lockedCells={},savedAt=null,coverageIssues=[],coverageTargets={}){
   schedState={y,m,days,sched,all,hmap,pubShifts,prevStreaks,prevLastShifts,lockedCells:normalizeLockedCells(lockedCells),savedAt,coverageIssues,coverageTargets};
   setLastScheduleRecordInfo({y,m,savedAt:savedAt||null,hasSaved:!!savedAt});
@@ -3256,7 +3098,7 @@ function renderSchedTable(y,m,days,sched,all,hmap,pubShifts={},prevStreaks={},pr
     else if(eff==='N') sc.N++;
   });
   const sb=document.createElement('div'); sb.className='stats-row';
-  const offLimitDisplay=Math.floor((STAFF.length-13)*days/STAFF.length);
+  const offLimitDisplay=Math.floor((STAFF.length-MIN_STAFF_TOTAL)*days/STAFF.length);
   sb.innerHTML=[{k:'D',l:'白班 D'},{k:'E',l:'小夜 E'},{k:'N',l:'大夜 N'},{k:'EN',l:'彈性班'}].map(g=>`<div class="stat-box"><div class="stat-lbl">${g.l}</div><div class="stat-val val-${g.k==='EN'?'E':g.k}">${sc[g.k]}</div></div>`).join('')+`<div class="stat-box"><div class="stat-lbl">月份天數</div><div class="stat-val">${days}</div></div><div class="stat-box"><div class="stat-lbl">OFF上限/人</div><div class="stat-val" style="color:var(--accent)">${offLimitDisplay}天</div></div><div class="stat-box"><div class="stat-lbl">最低上班人數</div><div class="stat-val" style="color:var(--ok)">13人</div></div>`;
   out.appendChild(sb);
   const hint=document.createElement('div'); hint.className='tbl-hint';
@@ -3348,15 +3190,7 @@ function renderSchedTable(y,m,days,sched,all,hmap,pubShifts={},prevStreaks={},pr
         }
       }
       // 計算紅字OFF（國定假日+例假日的OFF天數）
-      let holOff=0;
-      for(let d=0;d<days;d++){
-        const v=sc2[d]||'OFF';
-        if(v==='OFF'||!v){
-          const dt=new Date(y,m-1,d+1),wd=dt.getDay();
-          const key=dateKey(y,m,d+1),hinfo=hmap[key];
-          if(wd===0||wd===6||hinfo?.isHoliday) holOff++;
-        }
-      }
+      const holOff=calcHolOff(sc2,y,m,days,hmap);
       html+=`<td class="col-st col-holoff" style="color:#ef4444;font-weight:700" title="國定假日/例假日OFF天數">${holOff}</td>`;
       html+=`<td class="col-st col-totaloff" style="color:#374151;font-weight:700" title="總OFF天數">${off}</td>`;
       tr.innerHTML=html;
@@ -3618,7 +3452,7 @@ window.exportScheduleExcel = async function(){
   // 預假 set（個人假）
   const preoffMap={},flexPreoffMap={};
   STAFF.forEach(s=>{
-    const entries=(all[s.name]||[]).filter(o=>!/上課|支援|公假|出勤|IDS|ids|02/.test(o.note||''));
+    const entries=getRealOffDays(all[s.name]||[]);
     const flexible=getExcessDaySet(entries);
     preoffMap[s.name]=new Set(entries.filter(o=>!flexible.has(o.day)).map(o=>o.day));
     flexPreoffMap[s.name]=flexible;
@@ -4461,28 +4295,8 @@ window.undoEdit = function(){
     updateCellLockUI(name,day0);
   }
   // 更新上班/OFF統計
-  const r=schedState.sched[name];
-  const wk=r.filter(v=>v&&v!=='OFF').length;
-  const off=r.filter(v=>!v||v==='OFF').length;
   const tr=cellEl?.closest('tr');
-  if(tr){
-    const totalOffEl=tr.querySelector('.col-totaloff');
-    const holOffEl=tr.querySelector('.col-holoff');
-    if(totalOffEl) totalOffEl.textContent=off;
-    if(holOffEl){
-      let holOff=0;
-      const {y,m,days,hmap}=schedState;
-      for(let d=0;d<days;d++){
-        const v=r[d]||'OFF';
-        if(!v||v==='OFF'){
-          const dt=new Date(y,m-1,d+1),wd=dt.getDay();
-          const key=`${y}-${String(m).padStart(2,'0')}-${String(d+1).padStart(2,'0')}`;
-          if(wd===0||wd===6||hmap?.[key]?.isHoliday) holOff++;
-        }
-      }
-      holOffEl.textContent=holOff;
-    }
-  }
+  refreshOffColumns(tr,name,schedState);
   refreshCovRow(schedState);
   updateUndoBtn();
   toast(`已還原：${name} ${schedState.m}/${day0+1} → ${oldVal}`,'info');
@@ -4555,25 +4369,7 @@ function _doApplyEdit(name, day0, newVal, cellEl, wkEl, offEl){
   if(offEl) offEl.textContent = off;
   // 更新紅字OFF和總OFF欄
   const tr2 = cellEl?.closest('tr');
-  if(tr2){
-    const holOffEl=tr2.querySelector('.col-holoff');
-    const totalOffEl=tr2.querySelector('.col-totaloff');
-    if(totalOffEl) totalOffEl.textContent=off;
-    if(holOffEl){
-      // 重新計算紅字OFF
-      let holOff=0;
-      const {y,m,days,hmap}=schedState;
-      for(let d=0;d<days;d++){
-        const v=r[d]||'OFF';
-        if(!v||v==='OFF'){
-          const dt=new Date(y,m-1,d+1),wd=dt.getDay();
-          const key=`${y}-${String(m).padStart(2,'0')}-${String(d+1).padStart(2,'0')}`;
-          if(wd===0||wd===6||hmap?.[key]?.isHoliday) holOff++;
-        }
-      }
-      holOffEl.textContent=holOff;
-    }
-  }
+  refreshOffColumns(tr2,name,schedState);
   refreshCovRow(schedState);
   const shouldLock=!!document.getElementById('editLockNext')?.checked;
   setCellLock(name,day0,shouldLock,newVal);
@@ -4687,11 +4483,11 @@ window.openStaffSuggest = function(sh, day0){
     const offCnt=r.filter(v=>!v||v==='OFF').length;
     // 計算還剩幾天及OFF緊迫度
     const totalStaff=STAFF.length;
-    const offGoal=Math.floor((totalStaff-13)*(schedState.days||30)/totalStaff)+(s.shift==='N'?1:0);
+    const offGoal=Math.floor((totalStaff-MIN_STAFF_TOTAL)*(schedState.days||30)/totalStaff)+(s.shift==='N'?1:0);
 
     candidates.push({
       name:s.name, offCnt, offGoal,
-      consecOk, neOk, streak:nsAfter,
+      consecOk, shiftOk, streak:nsAfter,
       canWork:consecOk&&shiftOk,
       isPubOff, // 公假（算上班，但班別已固定）
     });
@@ -4763,28 +4559,8 @@ window.applySuggest = function(name, day0, sh){
   if(cellEl){cellEl.className=`cell ${sh} editable`;cellEl.textContent=sh;}
   updateCellLockUI(name,day0);
   // 更新統計
-  const r=schedState.sched[name];
-  const wk=r.filter(v=>v&&v!=='OFF').length;
-  const off=r.filter(v=>!v||v==='OFF').length;
   const tr=cellEl?.closest('tr');
-  if(tr){
-    const totalOffEl=tr.querySelector('.col-totaloff');
-    const holOffEl=tr.querySelector('.col-holoff');
-    if(totalOffEl) totalOffEl.textContent=off;
-    if(holOffEl){
-      let holOff=0;
-      const {y,m,days,hmap}=schedState;
-      for(let d=0;d<days;d++){
-        const v=r[d]||'OFF';
-        if(!v||v==='OFF'){
-          const dt=new Date(y,m-1,d+1),wd=dt.getDay();
-          const key=`${y}-${String(m).padStart(2,'0')}-${String(d+1).padStart(2,'0')}`;
-          if(wd===0||wd===6||hmap?.[key]?.isHoliday) holOff++;
-        }
-      }
-      holOffEl.textContent=holOff;
-    }
-  }
+  refreshOffColumns(tr,name,schedState);
   refreshCovRow(schedState);
   document.getElementById('suggestModal').classList.remove('show');
   toast(`${name} ${schedState.m}/${day0+1} 補排 ${sh} 班 ✓`,'success');
