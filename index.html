@@ -36,6 +36,7 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC',sans-seri
 select.field,input.field{width:100%;background:var(--bg);border:1.5px solid var(--border);color:var(--text);padding:11px 13px;border-radius:var(--radius);font-family:inherit;font-size:14px;outline:none;transition:border-color .2s;-webkit-appearance:none;appearance:none}
 select.field:focus,input.field:focus{border-color:var(--accent);background:var(--white)}
 .btn{padding:12px 20px;border-radius:var(--radius);border:none;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:6px;width:100%}
+.btn:disabled{opacity:.45;cursor:not-allowed}
 .btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:#3d5ce6}
 .btn-secondary{background:var(--bg);color:var(--text2);border:1.5px solid var(--border);margin-top:10px}.btn-secondary:hover{border-color:var(--accent);color:var(--accent)}
 .btn-sm{width:auto;padding:9px 16px;font-size:13px}
@@ -888,6 +889,7 @@ let STAFF = [...DEFAULT_STAFF];
 let latestPubShifts = {}; // 最新發布的班別（用於登入下拉）
 
 let me = null, myDays = [], myTravelRanges = [], travelPlansCache = [], myDailyLimitConflicts = new Map(), modalDay = null;
+let modalWillBeFlex = false; // 目前備註視窗開啟的這天是否為彈性預假（彈性預假必須填寫原因才能儲存）
 let monthDailyFull = new Map(); // 目前檢視月份中，已達每日預假上限（DAILY_OFF_MAX 人）的日期 → 申請人清單
 // holidayMap[y] = { "YYYY-MM-DD": { name, isHoliday, isMakeup } }
 const holidayCache = {};
@@ -1736,6 +1738,13 @@ async function renderCal(y,m){
 }
 
 // ── Modal ──
+// 彈性預假必須填寫原因才能按「儲存」；必要預假則不限制
+function updateNoteSaveBtnState(){
+  const saveBtn=document.getElementById('noteSaveBtn');
+  const input=document.getElementById('noteInput');
+  if(!saveBtn||!input) return;
+  saveBtn.disabled=modalWillBeFlex&&!input.value.trim();
+}
 function openModal(d,y,m,hinfo){
   modalDay={d,y,m};
   const entry=myDays.find(x=>x.day===d);
@@ -1747,6 +1756,7 @@ function openModal(d,y,m,hinfo){
     hEl.style.display='block';
   } else { hEl.style.display='none'; }
   const willBeFlex=entry?getExcessDaySet(myDays).has(d):getRealOffDays(myDays).length>=OFF_MAX;
+  modalWillBeFlex=willBeFlex;
   const help=document.getElementById('noteHelp');
   help.textContent=willBeFlex?'此日為彈性預假，排得出來才會給；請填寫原因（必填）。':'此日為必要預假，可輸入備註或留空。';
   const input=document.getElementById('noteInput');
@@ -1755,6 +1765,7 @@ function openModal(d,y,m,hinfo){
   document.getElementById('noteSaveBtn').style.display='';
   input.placeholder=willBeFlex?'彈性預假原因（必填）':'備註（選填）';
   input.value=willBeFlex?getFlexReason(entry):entry?.note||'';
+  updateNoteSaveBtnState();
   document.getElementById('noteModal').classList.add('show');
 }
 window.closeModal=()=>{document.getElementById('noteModal').classList.remove('show');modalDay=null;};
@@ -5100,6 +5111,7 @@ initSelect(); // 立即填充（用 DEFAULT_STAFF）
 loadStaffFromDB(); // 從 Firebase 更新
 loadLoginLeaveLockState();
 document.getElementById('noteModal').addEventListener('click',function(e){if(e.target===this)closeModal();});
+document.getElementById('noteInput').addEventListener('input',updateNoteSaveBtnState);
 </script>
 </body>
 </html>
