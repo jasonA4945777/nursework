@@ -1566,19 +1566,24 @@ function updateScheduleSavedAtLabel(savedAt){
     });
   }
 }
-window.showScheduleSaveInfo=function(){
+window.showScheduleSaveInfo=async function(){
   const y=+document.getElementById('admYear').value;
   const m=+document.getElementById('admMonth').value;
   const info=lastScheduleRecordInfo&&lastScheduleRecordInfo.y===y&&lastScheduleRecordInfo.m===m
     ? lastScheduleRecordInfo
     : {y,m,savedAt:null,hasSaved:false};
-  const msg=info.hasSaved
-    ? `${info.y}年${info.m}月\n上次存檔時間：${formatSavedAt(info.savedAt)}`
-    : `${y}年${m}月\n目前沒有已存檔班表。\n如果剛切換月份，畫面現在顯示的是空白待建立狀態。`;
+  const draftLine=info.hasSaved
+    ? `草稿上次存檔：${formatSavedAt(info.savedAt)}`
+    : '目前沒有已存檔的草稿。如果剛切換月份，畫面現在顯示的是空白待建立狀態。';
+  let publishInfo=null;
+  try{ publishInfo=await loadPublishInfo(y,m); }catch(e){}
+  const publishLine=publishInfo
+    ? `正式發布：已於 ${formatSavedAt(publishInfo.publishedAt)} 發布，員工看得到`
+    : '正式發布：尚未正式發布，員工目前看不到';
   showWarnModal({
     icon:info.hasSaved?'🕘':'📭',
-    title:'班表存檔紀錄',
-    msg,
+    title:'班表存檔／發布紀錄',
+    msg:`${y}年${m}月\n${draftLine}\n${publishLine}`,
     buttons:[{label:'知道了', primary:true}]
   });
 };
@@ -2940,15 +2945,17 @@ window.generateSchedule=async(opts={})=>{
     });
   }
 
-  renderSchedTable(y,m,dIM,sched,all,hmap,publishedShifts,prevStreaks,prevLastShifts,preservedLocks,schedState?.savedAt||null,coverageIssues,coverageTargets);
+  const publishInfo=await loadPublishInfo(y,m);
+  renderSchedTable(y,m,dIM,sched,all,hmap,publishedShifts,prevStreaks,prevLastShifts,preservedLocks,schedState?.savedAt||null,coverageIssues,coverageTargets,publishInfo);
 
   if(!coverageIssues.length){
     try{
       const savedAt=await persistScheduleSnapshot(y,m,sched,preservedLocks);
       updateScheduleSavedAtLabel(savedAt);
+      toast('草稿已產生並自動存檔，確認無誤後請按「正式發布班表」讓員工看到','info');
     }catch(e){
       console.error('auto-save schedule failed after generateSchedule:', { year:y, month:m, error:errorDetails(e) });
-      toast('班表已產生，但自動儲存失敗，請再按一次「儲存班表」','error');
+      toast('草稿已產生，但自動儲存失敗，請再按一次「儲存草稿」','error');
     }
   }else{
     const shortages=coverageIssues.filter(x=>x.type==='shortage').length;
@@ -3084,8 +3091,8 @@ function refreshOffColumns(tr,name,st){
   if(holOffEl) holOffEl.textContent=calcHolOff(r,st.y,st.m,st.days,st.hmap);
 }
 
-function renderSchedTable(y,m,days,sched,all,hmap,pubShifts={},prevStreaks={},prevLastShifts={},lockedCells={},savedAt=null,coverageIssues=[],coverageTargets={}){
-  schedState={y,m,days,sched,all,hmap,pubShifts,prevStreaks,prevLastShifts,lockedCells:normalizeLockedCells(lockedCells),savedAt,coverageIssues,coverageTargets};
+function renderSchedTable(y,m,days,sched,all,hmap,pubShifts={},prevStreaks={},prevLastShifts={},lockedCells={},savedAt=null,coverageIssues=[],coverageTargets={},publishInfo=null){
+  schedState={y,m,days,sched,all,hmap,pubShifts,prevStreaks,prevLastShifts,lockedCells:normalizeLockedCells(lockedCells),savedAt,coverageIssues,coverageTargets,publishInfo};
   setLastScheduleRecordInfo({y,m,savedAt:savedAt||null,hasSaved:!!savedAt});
   const out=document.getElementById('schedOut'); out.innerHTML='';
   // 用當月發布的班別指派計算人數（更準確）
@@ -3222,12 +3229,14 @@ function renderSchedTable(y,m,days,sched,all,hmap,pubShifts={},prevStreaks={},pr
     <span style="font-size:11px">✏️ 點擊格子修改　｜　點紅色數字補班　｜　🔒 金框斜紋格 = 已鎖定</span>
     <span id="coverageRepairStatus" style="font-size:11px;${coverageIssues.length?'background:#fff1f2;color:#be123c;border:1px solid #fecdd3':'background:#ecfdf5;color:#047857;border:1px solid #a7f3d0'};border-radius:8px;padding:5px 10px;font-weight:700">${coverageIssues.length?(coverageIssues.filter(x=>x.type==='shortage').map(x=>`${m}/${x.day} ${x.shift}缺${x.target-x.count}人`).join('、')||'鎖定內容造成人力超編'):'規則檢查通過，已自動修復'}</span>
     <span id="lockCountLabel" style="font-size:11px;background:#fff;color:#334155;border:1px solid #cbd5e1;border-radius:999px;padding:4px 10px">已鎖定 ${countLockedCells(schedState.lockedCells)} 格</span>
-    <span id="scheduleSavedAt" style="font-size:11px;background:#fff;color:#334155;border:1px solid #cbd5e1;border-radius:999px;padding:4px 10px">上次存檔：${formatSavedAt(savedAt)}</span>
+    <span id="scheduleSavedAt" style="font-size:11px;background:#fff;color:#334155;border:1px solid #cbd5e1;border-radius:999px;padding:4px 10px">草稿上次存檔：${formatSavedAt(savedAt)}</span>
+    <span id="schedulePublishedAt" style="font-size:11px;border-radius:999px;padding:4px 10px;font-weight:700;${publishInfo?'background:#dcfce7;color:#166534;border:1px solid #86efac':'background:#fef3c7;color:#92400e;border:1px solid #fcd34d'}">${publishInfo?`✅ 已正式發布：${formatSavedAt(publishInfo.publishedAt)}`:'⚠️ 尚未正式發布，員工目前看不到'}</span>
     <div style="display:flex;gap:6px;margin-left:auto;align-items:center;flex-wrap:wrap">
       <button onclick="rerunScheduleKeepLocks()" style="background:#0f172a;color:#fff;border:none;border-radius:8px;padding:7px 12px;font-weight:700;cursor:pointer;font-size:12px">🔒 保留鎖定重排</button>
       <button id="undoBtn" onclick="undoEdit()" disabled style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;border-radius:8px;padding:7px 12px;font-weight:700;cursor:pointer;font-size:12px;opacity:0.4" title="沒有可還原的操作">↩ 上一步</button>
       <button onclick="exportScheduleExcel()" style="background:#16a34a;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-weight:700;cursor:pointer;font-size:12px">📊 匯出 Excel</button>
-      <button onclick="saveEditedSchedule()" style="background:var(--accent,#2563eb);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-weight:700;cursor:pointer;font-size:12px">💾 儲存班表</button>
+      <button onclick="saveEditedSchedule()" style="background:var(--accent,#2563eb);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-weight:700;cursor:pointer;font-size:12px">💾 儲存草稿</button>
+      <button onclick="publishSchedule()" style="background:#ea580c;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-weight:700;cursor:pointer;font-size:12px">🚀 正式發布班表</button>
     </div>`;
   // 重置 undo 歷史（新排班清空歷史）
   editHistory.length=0; updateUndoBtn();
@@ -3811,16 +3820,27 @@ async function fbLoadPublishedFull(y,m){
   }
 }
 
-// ── Firebase: Published Schedule (班表) ──
-async function fbSaveSchedule(y,m,scheduleData,lockedCells={},publishedAt=new Date().toISOString()){
-  await setDoc(doc(db,'publishedSchedule',`${y}_${m}`),{
+// ── Firebase: 班表草稿（scheduleDrafts，僅供管理端編輯/預覽，員工看不到）──
+async function fbSaveScheduleDraft(y,m,scheduleData,lockedCells={},savedAt=new Date().toISOString()){
+  await setDoc(doc(db,'scheduleDrafts',`${y}_${m}`),{
     year:y,
     month:m,
     schedule:scheduleData,
     lockedCells:normalizeLockedCells(lockedCells),
-    publishedAt
+    savedAt
   });
 }
+async function fbLoadScheduleDraft(y,m){
+  try{
+    const s=await getDoc(doc(db,'scheduleDrafts',`${y}_${m}`));
+    return s.exists()?s.data():null;
+  }catch(e){
+    console.error('fbLoadScheduleDraft failed:', { year:y, month:m, error:errorDetails(e) });
+    throw e;
+  }
+}
+
+// ── Firebase: 正式發布班表（publishedSchedule，員工端唯一會讀取的來源）──
 async function fbLoadSchedule(y,m){
   try{
     const s=await getDoc(doc(db,'publishedSchedule',`${y}_${m}`));
@@ -3831,18 +3851,36 @@ async function fbLoadSchedule(y,m){
   }
 }
 
+// 儲存班表草稿：由「自動排班」與「儲存草稿」呼叫，只影響管理端工作副本，不會讓員工看到
 async function persistScheduleSnapshot(y,m,sched,lockedCells={}){
-  const dIM=new Date(y,m,0).getDate();
   const savedAt=new Date().toISOString();
-  await fbSaveSchedule(y,m,sched,lockedCells,savedAt);
+  await fbSaveScheduleDraft(y,m,sched,lockedCells,savedAt);
+  return savedAt;
+}
+
+// 正式發布班表：把目前內容複製為員工可見的正式版本，並同時凍結當月「班別設定」快照與月底連班資料
+// （凍結後，之後若在「人員設定」調整班別設定，不會回頭改變已發布這個月的內容）
+async function publishScheduleFinal(y,m,sched,lockedCells={}){
+  const dIM=new Date(y,m,0).getDate();
+  const publishedAt=new Date().toISOString();
+  let shifts={};
+  try{ const pd=await fbLoadPublishedFull(y,m); shifts=pd?.shifts||{}; }catch(e){}
+  await setDoc(doc(db,'publishedSchedule',`${y}_${m}`),{
+    year:y,
+    month:m,
+    schedule:sched,
+    lockedCells:normalizeLockedCells(lockedCells),
+    shifts,
+    publishedAt
+  });
   const streaks=calcMonthEndStreak(sched,dIM);
   await setDoc(doc(db,'monthEndStreak',`${y}_${m}`),{
     year:y,
     month:m,
     streaks,
-    savedAt
+    savedAt:publishedAt
   });
-  return savedAt;
+  return publishedAt;
 }
 
 // ── Shift Assignment Grid (Admin) ──
@@ -3878,9 +3916,9 @@ async function _loadShiftGrid(y, m){
   const statusEl=document.getElementById('publishStatus');
   if(pubData){
     const t=new Date(pubData.publishedAt).toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
-    statusEl.innerHTML=`<span class="published-badge">✓ 已發布 ${t}</span>`;
+    statusEl.innerHTML=`<span class="published-badge">✓ ${y}年${m}月班別設定已發布 ${t}</span>`;
   } else {
-    statusEl.innerHTML='<span style="color:var(--text2)">尚未發布</span>';
+    statusEl.innerHTML=`<span style="color:var(--text2)">${y}年${m}月班別設定尚未發布</span>`;
   }
   // Render rows grouped by shift
   grid.innerHTML='';
@@ -4064,18 +4102,10 @@ window.publishShifts=async function(){
   try{
     await fbSavePublished(y,m,pendingShifts);
     loader(false);
-    // 同步更新 STAFF 的預設 shift（讓登入下拉顯示正確班別）
-    STAFF=STAFF.map(s=>{
-      const ps=pendingShifts[s.name];
-      if(!ps) return s;
-      // 陣列 ['E','N'] → 'EN'；單一 'D'/'E'/'N' → 直接用
-      const newShift=Array.isArray(ps)?(ps.includes('E')&&ps.includes('N')?'EN':ps[0]):ps;
-      return {...s,shift:newShift};
-    });
-    await fbSaveStaff(STAFF); // 存回 Firebase
-    latestPubShifts=pendingShifts; // 更新最新發布班別
-    initSelect(); // 更新登入下拉
-    toast(`${y}年${m}月班別已發布 ✓`,'success');
+    // 注意：這裡刻意「不」寫回全域 STAFF／staffList。班別指派是「每月」資料（publishedShifts/{y}_{m}），
+    // 全域 STAFF 只存人員基本資料與預設班別，不能被單一月份的發布動作覆寫，否則會污染其他月份的排班/人力計算。
+    latestPubShifts=pendingShifts; // 僅用於登入頁「目前生效班別」顯示的快取，不影響 STAFF
+    toast(`${y}年${m}月班別已發布 ✓（僅影響 ${y}年${m}月，不會更動其他月份或人員基本資料）`,'success');
     const _y=+document.getElementById('smYear')?.value||+document.getElementById('admYear').value;
     const _m=+document.getElementById('smMonth')?.value||+document.getElementById('admMonth').value;
     _loadShiftGrid(_y,_m); // refresh status
@@ -4089,24 +4119,25 @@ window.loadMySchedule=async function(){
   const out=document.getElementById('myScheduleOut');
   out.innerHTML='<div class="empty"><div class="empty-icon">⏳</div><div class="empty-text">載入中…</div></div>';
   try{
-    const [pubData, scheduleData, hmap, myOffs] = await Promise.all([
-      fbLoadPublishedFull(y,m),
+    // 員工端只認「正式發布班表」(publishedSchedule)，不可用「班別設定」(publishedShifts) 或自行合成的替代班表頂替
+    const [scheduleData, hmap, myOffs] = await Promise.all([
       fbLoadSchedule(y,m),
       fetchHolidays(y),
       fbLoad(me.name,y,m)
     ]);
-    if(!pubData){
-      out.innerHTML=`<div class="ms-unpublished"><div style="font-size:32px;margin-bottom:8px">🔒</div><div style="font-weight:700;font-size:15px;margin-bottom:4px">班表尚未發布</div><div style="font-size:13px">護理長發布後即可查看</div></div>`;
+    const actualSchedule=scheduleData?.schedule?.[me.name]||null;
+    if(!scheduleData||!scheduleData.schedule||!actualSchedule){
+      out.innerHTML=`<div class="ms-unpublished"><div style="font-size:32px;margin-bottom:8px">🔒</div><div style="font-weight:700;font-size:15px;margin-bottom:4px">班表尚未發布</div><div style="font-size:13px">護理長正式發布後即可查看</div></div>`;
       return;
     }
-    const myShift=pubData.shifts[me.name]||me.shift;
-    const pubTime=new Date(pubData.publishedAt).toLocaleString('zh-TW',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+    // 我的班別以「發布當下」凍結的快照為準，之後若調整班別設定也不會回頭改變這裡的顯示
+    const myShift=scheduleData.shifts?.[me.name]||me.shift;
+    const pubTime=new Date(scheduleData.publishedAt).toLocaleString('zh-TW',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
     const dIM=new Date(y,m,0).getDate();
     const first=new Date(y,m-1,1).getDay();
     const flexDays=getExcessDaySet(myOffs);
     const requiredDays=new Set(getRealOffDays(myOffs).filter(o=>!flexDays.has(o.day)).map(o=>o.day));
     const travelDays=new Set(myOffs.filter(o=>o.travelRangeId).map(o=>o.day));
-    const actualSchedule=scheduleData?.schedule?.[me.name]||null;
     // Build calendar
     out.innerHTML=`
       <div style="background:var(--white);border-radius:14px;box-shadow:var(--shadow);padding:20px;">
@@ -4139,8 +4170,9 @@ window.loadMySchedule=async function(){
       const isRequired=requiredDays.has(d);
       const isFlexible=flexDays.has(d);
       const isTravel=travelDays.has(d);
-      const fallbackShift=Array.isArray(myShift)?myShift[0]:myShift;
-      const shiftVal=actualSchedule?.[d]||(isRequired?'OFF':fallbackShift);
+      // 只顯示正式發布班表裡的真實資料；缺資料時如實標示「無資料」，不自行猜測/合成班別
+      const rawVal=actualSchedule[d];
+      const shiftVal=(rawVal!=null&&rawVal!=='')?rawVal:null;
       let cls='ms-day';
       if(we) cls+=' we';
       if(hinfo?.isHoliday) cls+=' holiday';
@@ -4150,8 +4182,8 @@ window.loadMySchedule=async function(){
       const flexReason=isFlexible?getFlexReason(entry):'';
       const el=document.createElement('div'); el.className=cls;
       const offTitle=isFlexible?`彈性預假：${flexReason}（${shiftVal==='OFF'?'已排休':'因人力未排休'}）`:isRequired?'必要預假':'';
-      el.title=[isTravel?'出國預假':'',offTitle].filter(Boolean).join('｜');
-      el.innerHTML=`<span class="ms-dnum">${d+1}</span><span class="ms-shift ${shiftVal}">${shiftVal}</span>${isRequired?'<span class="ms-off-dot"></span>':isFlexible?'<span class="ms-off-dot flex"></span>':''}${isTravel?'<span class="ms-travel-mark">✈ 出國</span>':''}${hinfo?.isHoliday?`<span class="ms-hname">${hinfo.name}</span>`:''}`;
+      el.title=[isTravel?'出國預假':'',offTitle,shiftVal?'':'此日無班表資料，請洽管理者'].filter(Boolean).join('｜');
+      el.innerHTML=`<span class="ms-dnum">${d+1}</span><span class="ms-shift ${shiftVal||''}" style="${shiftVal?'':'color:#cbd5e1'}">${shiftVal||'-'}</span>${isRequired?'<span class="ms-off-dot"></span>':isFlexible?'<span class="ms-off-dot flex"></span>':''}${isTravel?'<span class="ms-travel-mark">✈ 出國</span>':''}${hinfo?.isHoliday?`<span class="ms-hname">${hinfo.name}</span>`:''}`;
       grid.appendChild(el);
     }
   }catch(e){
@@ -4581,13 +4613,36 @@ window.rerunScheduleKeepLocks = function(){
 };
 
 // ── 自動載入班表（排班管理頁進入時）──
+// 載入「正式發布」狀態（僅供顯示用，不影響管理端編輯內容）
+async function loadPublishInfo(y,m){
+  try{
+    const pub=await fbLoadSchedule(y,m);
+    return pub&&pub.schedule?{publishedAt:pub.publishedAt||null}:null;
+  }catch(e){
+    return null;
+  }
+}
+
 async function autoLoadSchedule(){
   const y=+document.getElementById('admYear').value;
   const m=+document.getElementById('admMonth').value;
   // 如果已有 schedState（已排班），不重複載入
   if(schedState&&schedState.y===y&&schedState.m===m) return;
   try{
-    const saved=await fbLoadSchedule(y,m);
+    // 優先載入管理端的「班表草稿」；若尚無草稿，才退回讀取已正式發布的內容作為起點
+    let saved=await fbLoadScheduleDraft(y,m);
+    let isFromPublished=false;
+    let publishInfo=null;
+    if(!saved||!saved.schedule){
+      const pub=await fbLoadSchedule(y,m);
+      if(pub&&pub.schedule){
+        saved=pub;
+        isFromPublished=true;
+        publishInfo={publishedAt:pub.publishedAt||null};
+      }
+    }else{
+      publishInfo=await loadPublishInfo(y,m);
+    }
     if(!saved||!saved.schedule){
       setLastScheduleRecordInfo({y,m,savedAt:null,hasSaved:false});
       renderScheduleEmptyState(`${y}年${m}月尚未有存檔班表`,'可按「自動排班」建立新的班表');
@@ -4608,14 +4663,15 @@ async function autoLoadSchedule(){
         prevLastShifts=pd.data().lastShifts||{};
       }
     }catch(e){}
-    renderSchedTable(y,m,dIM,sched,all,hmap,publishedShifts,prevStreaks,prevLastShifts,lockedCells,saved.publishedAt||null);
+    // 草稿本身沒有另外標「上次存檔」，只有從草稿載入時才視為有存檔紀錄；直接從已發布內容起頭的則視為尚未存草稿
+    renderSchedTable(y,m,dIM,sched,all,hmap,publishedShifts,prevStreaks,prevLastShifts,lockedCells,isFromPublished?null:(saved.savedAt||null),[],{},publishInfo);
     const loadedIssues=refreshCoverageStatus(schedState);
     if(loadedIssues.length){
       toast(`舊班表有 ${loadedIssues.length} 項人力異常，正在套用新規則自動修復…`,'info');
       await generateSchedule({preserveLocks:true,lockedCells});
       return;
     }
-    toast(`已自動載入 ${y}年${m}月 儲存的班表，規則檢查通過`,'info');
+    toast(isFromPublished?`${y}年${m}月尚無草稿，已載入正式發布內容作為起點`:`已自動載入 ${y}年${m}月 儲存的草稿，規則檢查通過`,'info');
   }catch(e){
     setLastScheduleRecordInfo({y,m,savedAt:null,hasSaved:false});
     renderScheduleEmptyState('載入存檔班表失敗','請稍後再試，或重新產生班表');
@@ -4930,11 +4986,50 @@ window.saveEditedSchedule = async function(){
     const savedAt=await persistScheduleSnapshot(y,m,sched,lockedCells);
     loader(false);
     updateScheduleSavedAtLabel(savedAt);
-    toast('班表已儲存 ✓（已記錄月底連班資料）','success');
+    toast('草稿已儲存 ✓（員工尚未看得到，請確認無誤後按「正式發布班表」）','success');
   }catch(e){
     loader(false);
     toast('儲存失敗','error');
   }
+};
+
+// ── 正式發布班表：把目前內容變成員工可見的正式版本 ──
+window.publishSchedule = async function(){
+  if(!schedState) return;
+  const issues=refreshCoverageStatus(schedState);
+  if(issues.length){
+    const shortages=issues.filter(x=>x.type==='shortage').length;
+    toast(shortages?`仍有 ${shortages} 個無法自動補足的人力缺口，請先安排增援再發布`:'仍有班別超編，請先解除鎖定衝突再發布','error');
+    return;
+  }
+  const {y,m,sched,lockedCells={}} = schedState;
+  showWarnModal({
+    icon:'🚀',
+    title:`正式發布 ${y}年${m}月班表？`,
+    msg:`發布後，所有員工登入「我的班表」就能立即看到這份班表內容。\n請確認畫面上的班表已經是最終版本再發布。`,
+    buttons:[
+      {label:'確認發布', primary:true, onClick:async()=>{
+        loader(true);
+        try{
+          // 發布前先確保草稿與目前畫面內容一致，避免草稿與正式版分岔
+          await persistScheduleSnapshot(y,m,sched,lockedCells);
+          const publishedAt=await publishScheduleFinal(y,m,sched,lockedCells);
+          if(schedState){ schedState.publishInfo={publishedAt}; }
+          loader(false);
+          const el=document.getElementById('schedulePublishedAt');
+          if(el){
+            el.style.cssText='font-size:11px;border-radius:999px;padding:4px 10px;font-weight:700;background:#dcfce7;color:#166534;border:1px solid #86efac';
+            el.textContent=`✅ 已正式發布：${formatSavedAt(publishedAt)}`;
+          }
+          toast(`🚀 ${y}年${m}月班表已正式發布，所有員工現在都能查看`,'success');
+        }catch(e){
+          loader(false);
+          toast('發布失敗，請稍後再試','error');
+        }
+      }},
+      {label:'取消'}
+    ]
+  });
 };
 
 // ── Init ──
