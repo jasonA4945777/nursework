@@ -662,7 +662,14 @@ thead th.col-prev{background:#f8f9ff;font-size:9px;color:var(--text2);position:s
         </div>
       </div>
 
-
+      <!-- 全部人員（全域名單，不分月份；刪除人員、編輯全域預設班別）-->
+      <div class="staff-mgmt-header">
+        <div>
+          <div class="staff-mgmt-title">👥 全部人員</div>
+          <div class="staff-mgmt-sub">人員名單與「全域預設班別」，不分月份；每月實際要上什麼班別請在下方「班別指派」設定</div>
+        </div>
+      </div>
+      <div class="staff-table" id="staffTable"></div>
 
       <!-- 班別指派（按月份）-->
       <div>
@@ -4948,6 +4955,7 @@ window.loadStaffMgmtPage = async function(){
   const y=+document.getElementById('smYear')?.value||new Date().getFullYear();
   const m=+document.getElementById('smMonth')?.value||new Date().getMonth()+1;
   syncAdminMonthSelectors(y,m); // 同步排班/特殊規則/預假頁
+  renderStaffTable();
   loadShiftAssignGridForMonth(y, m);
 };
 
