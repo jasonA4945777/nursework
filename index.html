@@ -2350,6 +2350,7 @@ window.generateSchedule=async(opts={})=>{
       idsDays:idsNotes, o2Days:o2Notes,
       A:new Array(dIM).fill(null),
       last:pl, streak:ps,
+      carryInShift:pl, // 上個月最後一天實際上的班別，d0=0 的轉班合法性判斷要用這個，不能用 n.last（runOnce 跑完後會被洗成當月最後一天的值）
       offCnt:0, workCnt:0,
     };
   });
@@ -2848,7 +2849,7 @@ window.generateSchedule=async(opts={})=>{
     if(!n.allowed.includes(sh)&&!(n.isFlex&&sh==='D'&&isDisplayENFull(d0))) return false;
     if(getLockedValue(preservedLocks,n.name,d0)!==undefined) return false;
 
-    const prev=d0>0?n.A[d0-1]:'OFF';
+    const prev=d0>0?n.A[d0-1]:n.carryInShift;
     const next=d0<dIM-1?n.A[d0+1]:'OFF';
     if(sh==='E'&&prev==='N') return false;
     if(sh==='D'&&(prev==='E'||prev==='N')) return false;
@@ -2871,7 +2872,7 @@ window.generateSchedule=async(opts={})=>{
     if(getLockedValue(preservedLocks,n.name,d0)!==undefined) return false;
     if(!n.allowed.includes(sh)&&!(n.isFlex&&sh==='D'&&isDisplayENFull(d0))) return false;
 
-    const prev=d0>0?n.A[d0-1]:'OFF';
+    const prev=d0>0?n.A[d0-1]:n.carryInShift;
     const next=d0<dIM-1?n.A[d0+1]:'OFF';
     if(sh==='E'&&prev==='N') return false;
     if(sh==='D'&&(prev==='E'||prev==='N')) return false;
