@@ -3919,11 +3919,12 @@ async function publishScheduleFinal(y,m,sched,lockedCells={}){
     shifts,
     publishedAt
   });
-  const streaks=calcMonthEndStreak(sched,dIM);
+  const {streaks,lastShifts}=calcMonthEndStreak(sched,dIM);
   await setDoc(doc(db,'monthEndStreak',`${y}_${m}`),{
     year:y,
     month:m,
     streaks,
+    lastShifts,
     savedAt:publishedAt
   });
   return publishedAt;
@@ -4930,8 +4931,10 @@ function toast(msg,type='success'){const t=document.getElementById('toast');t.te
 
 // ── 計算月底連班天數（儲存到 Firebase 供下個月使用）──
 function calcMonthEndStreak(sched, dIM){
-  // 回傳每人月底連續上班天數（空白=OFF）
-  const streaks={};
+  // 回傳每人月底連續上班天數（streaks）以及月底最後一天實際上的班別（lastShifts）
+  // lastShifts 是給下個月排班判斷「轉班是否合法」用的（例如 N 後不能直接接 E），
+  // 少了它下個月只能亂猜（通常會誤用「本月指派班別」頂替），可能讓不合法的轉班在月初被放行。
+  const streaks={}, lastShifts={};
   STAFF.forEach(s=>{
     const nm=s.name;
     const r=sched[nm]||[];
@@ -4942,8 +4945,11 @@ function calcMonthEndStreak(sched, dIM){
       count++;
     }
     streaks[nm]=count;
+    const lastVal=r[dIM-1];
+    // O2/IDS 算上班，連班判斷上視同 D（與排班演算法、手動編輯連班換算邏輯一致）
+    lastShifts[nm]=count>0?((lastVal==='O2'||lastVal==='IDS')?'D':lastVal):'OFF';
   });
-  return streaks;
+  return {streaks,lastShifts};
 }
 
 // ── 特殊規則管理 ──
