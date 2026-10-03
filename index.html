@@ -856,7 +856,7 @@ const DAILY_OFF_MAX = 5; // 每天最多可預假人數，第 DAILY_OFF_MAX+1 �
 const TRAVEL_OVERLAP_DAYS = 4;
 const TRAVEL_OVERLAP_MAX = 2;
 const SPECIAL_OFF_NOTE_RE = /上課|支援|公假|出勤|IDS|02/i;
-const MIN_STAFF = { D:6, E:4, N:3 };
+const MIN_STAFF = { D:6, E:3, N:3 };
 const MIN_STAFF_TOTAL = MIN_STAFF.D + MIN_STAFF.E + MIN_STAFF.N;
 // 班別值統一正規化：STAFF/舊資料常見的字串 'EN' 代表「彈性 E+N」，必須轉成陣列 ['E','N']
 // 才能讓後續的 Array.isArray(eff) 判斷正確運作；否則會被當成一個不存在的班別 'EN' 直接寫進班表。
@@ -2304,7 +2304,7 @@ window.generateSchedule=async(opts={})=>{
   // ══════════════════════════════════════
   const MAX_CONSEC = 6;
   const MIN_D=6, MAX_D=6; // 白班硬性規定固定 6 人上班（不再允許放到 7 人）
-  const MIN_E=4, MAX_E=5;
+  const MIN_E=3, MAX_E=5;
   const N_COUNT=3;
   const totalStaff=STAFF.length;
   const OFF_GOAL=Math.floor((totalStaff-MIN_STAFF_TOTAL)*dIM/totalStaff);
@@ -3098,7 +3098,7 @@ window.generateSchedule=async(opts={})=>{
   // 3. 每日人力檢查
   console.group('3️⃣ 每日人力不足檢查');
   let covOK=true;
-  const minMap={D:6,E:4,N:3};
+  const minMap={D:6,E:3,N:3};
   for(let d=0;d<dIM;d++){
     const dt=new Date(y,m-1,d+1);
     const wd=['日','一','二','三','四','五','六'][dt.getDay()];
