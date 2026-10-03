@@ -3503,6 +3503,7 @@ window.exportScheduleExcel = async function(){
 
   const wb=new ExcelJS.Workbook();
   wb.creator='護理排班系統';
+  wb.calcProperties.fullCalcOnLoad=true; // 開檔時重算公式（預假表的統計需要）
   const ws=wb.addWorksheet(`${y}.${String(m).padStart(2,'0')}`);
 
   // 預假 set（個人假）
@@ -3843,14 +3844,20 @@ window.exportScheduleExcel = async function(){
   const lws=wb.addWorksheet(`${y}.${String(m).padStart(2,'0')} 預假`);
   lws.getColumn(1).width=7;
   for(let d=2;d<=dIM+1;d++) lws.getColumn(d).width=3.2;
-  [dIM+2,dIM+3,dIM+4].forEach(c=>lws.getColumn(c).width=5);
+  [dIM+2,dIM+3].forEach(c=>lws.getColumn(c).width=6);
+  // 紅字日（週末＋國定假日）欄位，供每人「紅字OFF」公式使用
+  const lRedDays=[];
+  for(let d=0;d<dIM;d++){
+    const wd=new Date(y,m-1,d+1).getDay();
+    if(natHolidays.has(d)||wd===0||wd===6) lRedDays.push(d);
+  }
 
   lws.getRow(1).height=18;
   const lTitle=lws.getCell(1,1);
-  lTitle.value=`${y}年${m}月預假表（未排班）`;
+  lTitle.value=`${y}年${m}月預假表（未排班，可手動填入 D / E / N / OFF，下方統計會自動計算）`;
   lTitle.font=font(11,true,C.TITLE_FG);
   lTitle.alignment=align('left');
-  lws.mergeCells(1,1,1,dIM+4);
+  lws.mergeCells(1,1,1,dIM+3);
 
   lws.getRow(2).height=15;
   const lNameHdr=lws.getCell(2,1);
@@ -3864,13 +3871,13 @@ window.exportScheduleExcel = async function(){
     cell.alignment=align();
     cell.border=border(midlineCol!==null&&d===midlineCol);
   }
-  [['必要','856404'],['彈性','C2410C'],['總計','374151']].forEach(([v,clr],i)=>{
+  [['紅字OFF','ef4444'],['總OFF','374151']].forEach(([v,clr],i)=>{
     const c=lws.getCell(2,dIM+2+i);
     c.value=v; c.font=font(8,true,clr); c.alignment=align(); c.border=border();
   });
 
   let lRow=3;
-  const dailyLeaveCount=new Array(dIM).fill(0);
+  let lFirstStaffRow=null, lLastStaffRow=null;
   groups.forEach(g=>{
     const gs=STAFF.filter(s=>{
       const eff=schedState.pubShifts?.[s.name]||s.shift;
@@ -3904,41 +3911,64 @@ window.exportScheduleExcel = async function(){
         cell.alignment=align();
         if(preoffs.has(d)){
           cell.value='OFF'; cell.fill=fill(C.PREOFF); cell.font=font(7,true,'856404');
-          dailyLeaveCount[d]++;
         } else if(flexPreoffs.has(d)){
           cell.value='OFF'; cell.fill=fill(C.FLEX_PREOFF); cell.font=font(7,true,'FFFFFF');
-          dailyLeaveCount[d]++;
         } else if(otherByDay[d]){
           cell.value=otherByDay[d]; cell.fill=fill('FCE7F3'); cell.font=font(7,true,'BE185D');
         }
       }
-      [[preoffs.size,'856404'],[flexPreoffs.size,'C2410C'],[preoffs.size+flexPreoffs.size,'374151']].forEach(([v,clr],i)=>{
+      // 統計用公式：手動填入或修改班別後，Excel 會自動重算
+      const rowRange=`${colLetter(2)}${lRow}:${colLetter(dIM+1)}${lRow}`;
+      const redOffFormula=lRedDays.length?lRedDays.map(d=>`COUNTIF(${colLetter(d+2)}${lRow},"OFF")`).join('+'):'0';
+      const redOffCount=lRedDays.filter(d=>preoffs.has(d)||flexPreoffs.has(d)).length;
+      [[{formula:redOffFormula,result:redOffCount},'ef4444'],[{formula:`COUNTIF(${rowRange},"OFF")`,result:preoffs.size+flexPreoffs.size},'374151']].forEach(([v,clr],i)=>{
         const c=lws.getCell(lRow,dIM+2+i);
         c.value=v; c.font=font(8,true,clr); c.alignment=align(); c.border=border();
       });
+      if(lFirstStaffRow===null) lFirstStaffRow=lRow;
+      lLastStaffRow=lRow;
       lRow++;
     });
   });
 
-  // 每日預假人數
+  // 每日統計（公式）：D / E / N 人數與 OFF 人數，手動填班後自動更新
   lRow++;
-  lws.getRow(lRow).height=13;
-  const lCntLbl=lws.getCell(lRow,1);
-  lCntLbl.value='預假人數'; lCntLbl.font=font(8,true); lCntLbl.alignment=align('left'); lCntLbl.border=border();
-  for(let d=0;d<dIM;d++){
-    const cell=lws.getCell(lRow,d+2);
-    cell.value=dailyLeaveCount[d];
-    cell.font=font(8,true,dailyLeaveCount[d]>=DAILY_OFF_MAX?C.STAT_LOW_FG:'333333');
-    cell.alignment=align();
-    cell.border=border(midlineCol!==null&&d===midlineCol);
-  }
+  const lDaily=[
+    {label:'D班人數',val:'D',min:6},
+    {label:'E班人數',val:'E',min:4},
+    {label:'N班人數',val:'N',min:3},
+    {label:'OFF人數',val:'OFF',max:DAILY_OFF_MAX},
+  ];
+  lDaily.forEach(item=>{
+    lws.getRow(lRow).height=13;
+    const lbl=lws.getCell(lRow,1);
+    lbl.value=item.label; lbl.font=font(8,true); lbl.alignment=align('left'); lbl.border=border();
+    for(let d=0;d<dIM;d++){
+      const cell=lws.getCell(lRow,d+2);
+      const colRef=colLetter(d+2);
+      const result=lFirstStaffRow===null?0:item.val==='OFF'
+        ?STAFF.filter(s=>preoffMap[s.name]?.has(d)||flexPreoffMap[s.name]?.has(d)).length
+        :0;
+      cell.value=lFirstStaffRow===null?0:{formula:`COUNTIF(${colRef}${lFirstStaffRow}:${colRef}${lLastStaffRow},"${item.val}")`,result};
+      cell.font=font(8,true,'333333');
+      cell.alignment=align();
+      cell.border=border(midlineCol!==null&&d===midlineCol);
+    }
+    // 條件式格式：人力不足（低於最低人數）或 OFF 人數達每日上限時顯示紅字
+    const ref=`${colLetter(2)}${lRow}:${colLetter(dIM+1)}${lRow}`;
+    lws.addConditionalFormatting({ref,rules:[item.min
+      ?{type:'cellIs',operator:'lessThan',formulae:[item.min],priority:1,style:{font:{color:{argb:'FF'+C.STAT_LOW_FG},bold:true}}}
+      :{type:'cellIs',operator:'greaterThan',formulae:[item.max-1],priority:1,style:{font:{color:{argb:'FF'+C.STAT_LOW_FG},bold:true}}}
+    ]});
+    lRow++;
+  });
 
   lRow+=2;
   const lLegend=lws.getCell(lRow,1);
-  lLegend.value='圖例：黃色 OFF＝必要預假　橘色 OFF＝彈性預假（排得出來才放）　粉紅＝IDS / O2（上課、支援、公假等）';
+  lLegend.value='圖例：黃色 OFF＝必要預假　橘色 OFF＝彈性預假（排得出來才放）　粉紅＝IDS / O2（上課、支援、公假等）；D/E/N 低於最低人數或 OFF 達每日上限會顯示紅字';
   lLegend.font=font(9,true,'334155');
   lLegend.alignment=align('left');
-  lws.mergeCells(lRow,1,lRow,dIM+4);
+  lws.mergeCells(lRow,1,lRow,dIM+3);
 
   // 下載
   const buf=await wb.xlsx.writeBuffer();
