@@ -25,6 +25,82 @@
 body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC',sans-serif;font-size:14px;min-height:100vh}
 .screen{display:none;min-height:100vh}.screen.active{display:flex;flex-direction:column}
 
+/* 人員設定（單一清單） */
+.sm-toolbar{position:sticky;top:56px;z-index:30;display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--white);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);padding:10px 14px;margin-bottom:14px}
+.sm-month{display:flex;align-items:center;gap:6px}
+.sm-month input,.sm-month select{background:var(--white);border:1.5px solid var(--border);color:var(--text);padding:8px 10px;border-radius:var(--radius);font-family:inherit;font-size:14px;font-weight:700;outline:none;-webkit-appearance:none;appearance:none}
+.sm-month input{width:78px;text-align:center}
+.sm-month-unit{font-size:13px;color:var(--text2)}
+.sm-icon-btn{width:34px;height:34px;border-radius:8px;border:1.5px solid var(--border);background:var(--white);font-size:18px;line-height:1;cursor:pointer;color:var(--text)}
+.sm-icon-btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.sm-icon-btn:disabled{opacity:.3;cursor:default}
+.sm-status{flex:1;min-width:180px;font-size:12px;color:var(--text2)}
+.sm-dirty-badge{background:#fff7ed;color:#c2410c;border:1px solid #fdba74;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:4px}
+.sm-actions{display:flex;gap:8px;flex-wrap:wrap}
+.sm-btn{border:1.5px solid var(--border);background:var(--white);color:var(--text);border-radius:8px;padding:8px 14px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+.sm-btn:hover{border-color:var(--accent);color:var(--accent)}
+.sm-btn-ghost{color:var(--text2)}
+.sm-btn-primary{background:var(--published);border-color:var(--published);color:#fff}
+.sm-btn-primary:hover{color:#fff;filter:brightness(1.08)}
+.sm-btn-primary.sm-attn{box-shadow:0 0 0 3px #fed7aa}
+.sm-summary{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-bottom:12px}
+.sm-stat{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:8px 12px}
+.sm-stat-label{font-size:11px;color:var(--text2)}
+.sm-stat-val{font-size:20px;font-weight:700;font-family:"DM Mono",monospace}
+.sm-stat.D .sm-stat-val{color:var(--D)}.sm-stat.E .sm-stat-val{color:var(--E)}.sm-stat.N .sm-stat-val{color:var(--N)}.sm-stat.FLEX .sm-stat-val{color:#b45309}
+.sm-filterbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+.sm-filters{display:flex;gap:6px;flex-wrap:wrap;flex:1}
+.sm-chip{border:1.5px solid var(--border);background:var(--white);color:var(--text2);border-radius:20px;padding:5px 12px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer}
+.sm-chip.on{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
+.sm-search{background:var(--white);border:1.5px solid var(--border);border-radius:var(--radius);padding:8px 12px;font-family:inherit;font-size:13px;outline:none;width:180px}
+.sm-search:focus{border-color:var(--accent)}
+.sm-help{font-size:12px;color:var(--text2);margin-bottom:10px;line-height:1.6}
+.sm-list{background:var(--white);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
+.sm-row{display:grid;grid-template-columns:auto 28px minmax(90px,1fr) auto auto;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);border-left:4px solid transparent}
+.sm-row:last-child{border-bottom:none}
+.sm-row:hover{background:var(--bg)}
+.sm-row.sD{border-left-color:var(--D)}.sm-row.sE{border-left-color:var(--E)}.sm-row.sN{border-left-color:var(--N)}.sm-row.sFLEX{border-left-color:#f59e0b}
+.sm-row.changed{background:#fffbeb}
+.sm-row.drag-over{outline:2px dashed var(--accent);outline-offset:-2px}
+.sm-order{display:flex;flex-direction:column;gap:2px}
+.sm-order button{width:26px;height:18px;border:1px solid var(--border);background:var(--white);border-radius:5px;font-size:10px;line-height:1;cursor:pointer;color:var(--text2);padding:0}
+.sm-order button:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.sm-order button:disabled{opacity:.25;cursor:default}
+.sm-idx{font-family:"DM Mono",monospace;font-size:11px;color:var(--text2);text-align:right;cursor:grab;user-select:none}
+.sm-person{min-width:0}
+.sm-name{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sm-sub{font-size:11px;color:var(--text2);margin-top:2px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.sm-tag{border-radius:5px;padding:1px 6px;font-size:10px;font-weight:700}
+.sm-tag-diff{background:#e0f2fe;color:#0369a1}
+.sm-tag-changed{background:#ffedd5;color:#c2410c}
+.sm-seg{display:inline-flex;border:1.5px solid var(--border);border-radius:9px;overflow:hidden;background:var(--bg)}
+.sm-seg button{border:none;border-right:1px solid var(--border);background:transparent;padding:7px 12px;font-family:inherit;font-size:13px;font-weight:700;color:var(--text2);cursor:pointer;min-width:44px}
+.sm-seg button:last-child{border-right:none}
+.sm-seg button:hover{color:var(--text);background:#fff}
+.sm-seg button.on-D{background:var(--D);color:#fff}
+.sm-seg button.on-E{background:var(--E);color:#fff}
+.sm-seg button.on-N{background:var(--N);color:#fff}
+.sm-seg button.on-FLEX{background:#f59e0b;color:#fff}
+.sm-edit{border:none;background:none;font-size:15px;cursor:pointer;padding:6px;border-radius:8px;color:var(--text2)}
+.sm-edit:hover{background:var(--accent-bg)}
+.sm-empty{padding:28px;text-align:center;color:var(--text2);font-size:13px}
+@media (max-width:640px){
+  .sm-toolbar{top:0;padding:10px;gap:8px}
+  .sm-status{order:3;flex-basis:100%}
+  .sm-actions{flex-basis:100%}
+  .sm-actions .sm-btn{flex:1}
+  .sm-summary{gap:4px}
+  .sm-stat{padding:6px 4px;text-align:center}
+  .sm-stat-label{font-size:10px;white-space:nowrap}
+  .sm-stat-val{font-size:16px}
+  .sm-search{width:100%}
+  .sm-row{grid-template-columns:auto minmax(0,1fr) auto;row-gap:8px}
+  .sm-idx{display:none}
+  .sm-seg{grid-column:1 / -1;justify-self:stretch;display:flex}
+  .sm-seg button{flex:1;padding:9px 0}
+  .sm-edit{grid-row:1;grid-column:3}
+}
+
 /* LOGIN */
 #loginScreen{align-items:center;justify-content:center;background:linear-gradient(135deg,#eef1fe 0%,#f5f6fa 100%)}
 .login-box{background:var(--white);border-radius:16px;box-shadow:0 4px 24px rgba(79,110,247,.12);padding:40px 36px;width:360px;max-width:95vw}
@@ -642,54 +718,46 @@ thead th.col-prev{background:#f8f9ff;font-size:9px;color:var(--text2);position:s
       <div id="schedOut"><div class="empty"><div class="empty-icon">📋</div><div class="empty-text">選擇月份後點擊「自動排班」</div></div></div>
 
     </div>
-  </div>
 
-    <!-- 人員設定頁面 -->
+    <!-- 人員設定頁面：單一清單 = 人員名單 + 本月班別指派 -->
     <div class="page" id="pageStaffMgmt">
-      <!-- 年月選擇 -->
-      <div class="adm-controls" style="margin-bottom:20px">
-        <div class="grp"><label>年份</label><input type="number" id="smYear" min="2020" max="2099" value="2026" onchange="loadStaffMgmtPage()"></div>
-        <div class="grp"><label>月份</label>
-          <select id="smMonth" onchange="loadStaffMgmtPage()">
+      <div class="sm-toolbar">
+        <div class="sm-month">
+          <button type="button" class="sm-icon-btn" onclick="smShiftMonth(-1)" title="上個月" aria-label="上個月">‹</button>
+          <input type="number" id="smYear" min="2020" max="2099" value="2026" onchange="smOnMonthInput()" aria-label="年份">
+          <span class="sm-month-unit">年</span>
+          <select id="smMonth" onchange="smOnMonthInput()" aria-label="月份">
             <option value="1">1月</option><option value="2">2月</option><option value="3">3月</option>
             <option value="4">4月</option><option value="5">5月</option><option value="6">6月</option>
             <option value="7">7月</option><option value="8">8月</option><option value="9">9月</option>
             <option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
           </select>
+          <button type="button" class="sm-icon-btn" onclick="smShiftMonth(1)" title="下個月" aria-label="下個月">›</button>
         </div>
-        <div style="font-size:12px;color:var(--text2);align-self:center">
-          💡 班別指派按月份儲存，不同月份可以有不同的班別安排
+        <div id="publishStatus" class="sm-status"></div>
+        <div class="sm-actions">
+          <button type="button" class="sm-btn" onclick="showAddToGridModal()">＋ 新增人員</button>
+          <button type="button" class="sm-btn sm-btn-ghost" id="smRevertBtn" onclick="smRevertChanges()" style="display:none">還原變更</button>
+          <button type="button" class="sm-btn sm-btn-primary" onclick="publishShifts()" id="publishBtn">📢 儲存並發布</button>
         </div>
       </div>
 
-      <!-- 全部人員（全域名單，不分月份；刪除人員、編輯全域預設班別）-->
-      <div class="staff-mgmt-header">
-        <div>
-          <div class="staff-mgmt-title">👥 全部人員</div>
-          <div class="staff-mgmt-sub">人員名單與「全域預設班別」，不分月份；每月實際要上什麼班別請在下方「班別指派」設定</div>
-        </div>
-      </div>
-      <div class="staff-table" id="staffTable"></div>
+      <div class="sm-summary" id="smSummary"></div>
 
-      <!-- 班別指派（按月份）-->
-      <div>
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:10px">
-          <div>
-            <div style="font-size:15px;font-weight:700">班別指派</div>
-            <div style="font-size:12px;color:var(--text2);margin-top:2px">
-              為本月指定每位護理師的班別。選兩個班別（如 E＋N）→ 自動設為⚡彈性班
-            </div>
-          </div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <button class="btn btn-sm" onclick="showAddToGridModal()" style="background:#e0f2fe;color:#0369a1;border:none;border-radius:8px;padding:7px 12px;font-weight:700;cursor:pointer">＋ 新增人員</button>
-            <div id="publishStatus" style="font-size:12px;color:var(--text2)"></div>
-            <button class="btn btn-success btn-sm" onclick="publishShifts()" id="publishBtn">📢 儲存並發布</button>
-          </div>
-        </div>
-        <div style="font-size:11px;color:var(--text2);margin-bottom:8px">☰ 拖曳左側圖示可調整人員順序</div>
-        <div id="shiftAssignGrid" style="background:var(--white);border-radius:12px;box-shadow:var(--shadow);overflow:hidden"></div>
+      <div class="sm-filterbar">
+        <div class="sm-filters" id="smFilters"></div>
+        <input type="search" id="smSearch" class="sm-search" placeholder="🔍 搜尋姓名" oninput="smRenderList()">
       </div>
+
+      <div class="sm-help">
+        點 <b>D / E / N</b> 設定本月班別；<b>⚡E+N</b> 為彈性班。改完按「儲存並發布」才會生效（只影響這個月）。
+        「預設」是新月份尚未設定時使用的班別，可在 ✏️ 修改。
+      </div>
+
+      <div class="sm-list" id="shiftAssignGrid"></div>
+      <div class="staff-table" id="staffTable" style="display:none"></div>
     </div>
+  </div>
 </div>
 
 <input id="importExcelInput" type="file" accept=".xlsx,.xls" style="display:none" onchange="importPrevMonthExcel(this)">
@@ -1358,36 +1426,9 @@ async function loadStaffFromDB(){
   initSelect(); // 載入完成後更新登入選單
 }
 
+// 人員設定已整合為單一清單（見下方「人員設定：單一清單」），保留此函式名稱供其他地方呼叫
 window.renderStaffTable = function renderStaffTable(){
-  const tbl=document.getElementById('staffTable');
-  if(!tbl) return;
-  tbl.innerHTML='';
-  // Header
-  const hdr=document.createElement('div');
-  hdr.className='staff-table-row staff-table-hdr';
-  hdr.innerHTML='<div class="st-name">姓名</div><div class="st-shift">班別</div><div style="min-width:40px"></div>';
-  tbl.appendChild(hdr);
-  if(!STAFF.length){
-    const empty=document.createElement('div');
-    empty.style.cssText='padding:20px;text-align:center;color:var(--text2);font-size:13px';
-    empty.textContent='尚無人員';
-    tbl.appendChild(empty); return;
-  }
-  STAFF.forEach(s=>{
-    const row=document.createElement('div'); row.className='staff-table-row';
-    const shiftName=s.shift==='D'?'白班 D':s.shift==='E'?'小夜 E':s.shift==='N'?'大夜 N':s.shift==='EN'?'彈性 E+N':'大夜 N';
-    const isFlex=s.shift==='FLEX'||s.shift==='EN';
-    const offLabel=s.customOff!=null?`OFF:${s.customOff}天`:'OFF:9天';
-    const isEN=s.shift==='EN';
-    row.innerHTML=`
-      <div class="st-name">${s.name}</div>
-      <div class="st-shift" style="color:${isEN?'#7c3aed':s.shift==='D'?'var(--D)':s.shift==='E'?'var(--E)':'var(--N)'}">
-        ${isEN?'<span style="background:#ede9fe;color:#7c3aed;border-radius:6px;padding:2px 8px;font-size:12px;font-weight:700">⚡ 彈性 E+N</span>':shiftName}
-      </div>
-      <button class="st-del" onclick="showEditStaffShiftModal('${s.name}')" title="編輯預設班別" style="background:none;color:#94a3b8">✏️</button>
-      <button class="st-del" onclick="deleteStaffMember('${s.name}')" title="移除">✕</button>`;
-    tbl.appendChild(row);
-  });
+  if(smLoadedYM) smRenderAll();
 }
 
 window.toggleAddStaffForm=function(){
@@ -4062,111 +4103,256 @@ async function publishScheduleFinal(y,m,sched,lockedCells={}){
   return publishedAt;
 }
 
-// ── Shift Assignment Grid (Admin) ──
-let pendingShifts = {}; // name -> 'D'|'E'|'N'
+// ── 人員設定：單一清單（人員名單 + 本月班別指派）──
+// pendingShifts：本月畫面上的班別（尚未發布的修改也在這裡）；smBaseline：載入時（已發布或預設）的班別，用來判斷「有未發布的變更」
+var pendingShifts = {}; // name -> 'D'|'E'|'N'|['E','N']
+var smBaseline = {};
+var smLoadedYM = null;  // {y,m}：目前畫面對應的月份
+var smPublished = null; // 本月 publishedShifts 文件（未發布則為 null）
+var smFilter = 'ALL';
+const SM_LABEL = {D:'白班 D',E:'小夜 E',N:'大夜 N'};
+
+function smKey(v){ return Array.isArray(v)?'FLEX':v; }
+function smShiftText(v){ return Array.isArray(v)?`⚡ 彈性 ${v.join('+')}`:(SM_LABEL[v]||v||'—'); }
+function smSame(a,b){ return JSON.stringify(normalizeShiftValue(a)??null)===JSON.stringify(normalizeShiftValue(b)??null); }
+function smFormYM(){
+  return {
+    y:+document.getElementById('smYear')?.value||+document.getElementById('admYear')?.value||new Date().getFullYear(),
+    m:+document.getElementById('smMonth')?.value||+document.getElementById('admMonth')?.value||new Date().getMonth()+1
+  };
+}
+function smSetFormYM(y,m){
+  document.getElementById('smYear').value=y;
+  document.getElementById('smMonth').value=m;
+}
+// 名單有增減時，讓 pendingShifts 跟著 STAFF 走
+function smSyncPending(){
+  STAFF.forEach(s=>{ if(pendingShifts[s.name]==null) pendingShifts[s.name]=normalizeShiftValue(s.shift); });
+  Object.keys(pendingShifts).forEach(n=>{ if(!STAFF.some(s=>s.name===n)) delete pendingShifts[n]; });
+}
+function smChangedNames(){
+  return STAFF.filter(s=>!smSame(pendingShifts[s.name],smBaseline[s.name])).map(s=>s.name);
+}
+function smIsDirty(){ return !!smLoadedYM && smChangedNames().length>0; }
 
 window.loadShiftAssignGridForMonth = async function(y, m){
-  const grid=document.getElementById('shiftAssignGrid');
-  if(!grid) return;
+  if(!document.getElementById('shiftAssignGrid')) return;
   await _loadShiftGrid(y, m);
 };
 
 window.loadShiftAssignGrid = async function loadShiftAssignGrid(){
-  renderStaffTable();
-  const y=+document.getElementById('smYear')?.value||+document.getElementById('admYear').value;
-  const m=+document.getElementById('smMonth')?.value||+document.getElementById('admMonth').value;
+  const {y,m}=smFormYM();
+  // 同一個月且有未發布的修改 → 只重畫，不重新載入（避免切換分頁時修改消失）
+  if(smIsDirty() && smLoadedYM.y===y && smLoadedYM.m===m){ smRenderAll(); return; }
   await _loadShiftGrid(y, m);
 };
 
 async function _loadShiftGrid(y, m){
   const grid=document.getElementById('shiftAssignGrid');
-  grid.innerHTML='<div style="padding:20px;color:var(--text2);font-size:13px">⏳ 載入中…</div>';
-  let pub={}, pubData=null;
+  if(!grid) return;
+  grid.innerHTML='<div class="sm-empty">⏳ 載入中…</div>';
+  let pubData=null;
   try{
     pubData=await fbLoadPublishedFull(y,m);
-    pub=pubData?.shifts||{};
   }catch(e){
     console.error('_loadShiftGrid failed to load published shifts:', { year:y, month:m, error:errorDetails(e) });
   }
-  // Init pendingShifts from published or STAFF default
+  const pub=pubData?.shifts||{};
   // 注意：pub[name] 或 s.shift 都可能是字串 'EN'，一定要正規化成 ['E','N']，
   // 否則之後發布/排班時 'EN' 會被當成一個不存在的班別直接寫進班表格子。
-  pendingShifts={};
-  STAFF.forEach(s=>{ pendingShifts[s.name]=normalizeShiftValue(pub[s.name]||s.shift); }); // pub[name] may be array for flex
-  // Status
-  const statusEl=document.getElementById('publishStatus');
-  if(pubData){
-    const t=new Date(pubData.publishedAt).toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
-    statusEl.innerHTML=`<span class="published-badge">✓ ${y}年${m}月班別設定已發布 ${t}</span>`;
-  } else {
-    statusEl.innerHTML=`<span style="color:var(--text2)">${y}年${m}月班別設定尚未發布</span>`;
-  }
-  // Render rows grouped by shift
-  grid.innerHTML='';
-  // 單一清單渲染（支援跨群組拖曳排序）
-  grid.innerHTML='';
-  let dragSrc=null;
+  pendingShifts={}; smBaseline={};
   STAFF.forEach(s=>{
-      const row=document.createElement('div');
-      row.className='shift-row'; row.dataset.name=s.name;
+    const v=normalizeShiftValue(pub[s.name]||s.shift);
+    pendingShifts[s.name]=v;
+    // 已發布的月份：新加入、還沒發布過的人算「未發布的變更」
+    smBaseline[s.name]=pubData?(pub[s.name]!=null?normalizeShiftValue(pub[s.name]):undefined):v;
+  });
+  smPublished=pubData;
+  smLoadedYM={y,m};
+  smRenderAll();
+}
+
+function smRenderAll(){
+  if(!document.getElementById('shiftAssignGrid')) return;
+  smSyncPending();
+  smRenderStatus();
+  smRenderSummary();
+  smRenderFilters();
+  smRenderList();
+}
+
+function smRenderStatus(){
+  const statusEl=document.getElementById('publishStatus');
+  const btn=document.getElementById('publishBtn');
+  const revert=document.getElementById('smRevertBtn');
+  if(!statusEl||!smLoadedYM) return;
+  const {y,m}=smLoadedYM;
+  const changed=smChangedNames().length;
+  let html='';
+  if(smPublished){
+    const t=new Date(smPublished.publishedAt).toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+    html=`<span class="published-badge">✓ ${y}年${m}月已發布 ${t}</span>`;
+  } else {
+    html=`<span>${y}年${m}月班別<b>尚未發布</b>（目前顯示預設班別）</span>`;
+  }
+  if(changed) html+=` <span class="sm-dirty-badge">● ${changed} 人有未發布的變更</span>`;
+  statusEl.innerHTML=html;
+  if(btn) btn.classList.toggle('sm-attn', changed>0||!smPublished);
+  if(revert) revert.style.display=changed?'':'none';
+}
+
+function smRenderSummary(){
+  const el=document.getElementById('smSummary');
+  if(!el) return;
+  const c={D:0,E:0,N:0,FLEX:0};
+  STAFF.forEach(s=>{ const k=smKey(pendingShifts[s.name]); if(c[k]!=null) c[k]++; });
+  el.innerHTML=[
+    ['D','白班 D',c.D],['E','小夜 E',c.E],['N','大夜 N',c.N],['FLEX','⚡ 彈性',c.FLEX],['ALL','總人數',STAFF.length]
+  ].map(([k,label,n])=>`<div class="sm-stat ${k}"><div class="sm-stat-label">${label}</div><div class="sm-stat-val">${n}</div></div>`).join('');
+}
+
+function smRenderFilters(){
+  const el=document.getElementById('smFilters');
+  if(!el) return;
+  const count=k=>k==='ALL'?STAFF.length:STAFF.filter(s=>smKey(pendingShifts[s.name])===k).length;
+  const changed=smChangedNames().length;
+  const opts=[['ALL','全部'],['D','D'],['E','E'],['N','N'],['FLEX','⚡ 彈性']];
+  if(changed) opts.push(['CHANGED','未發布變更']);
+  else if(smFilter==='CHANGED') smFilter='ALL';
+  el.innerHTML=opts.map(([k,label])=>
+    `<button type="button" class="sm-chip${smFilter===k?' on':''}" data-filter="${k}">${label} ${k==='CHANGED'?changed:count(k)}</button>`).join('');
+  el.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{ smFilter=b.dataset.filter; smRenderFilters(); smRenderList(); });
+}
+
+window.smRenderList = function(){
+  const grid=document.getElementById('shiftAssignGrid');
+  if(!grid) return;
+  const q=(document.getElementById('smSearch')?.value||'').trim();
+  const changedSet=new Set(smChangedNames());
+  const rows=STAFF.map((s,i)=>({s,i})).filter(({s})=>{
+    if(q && !s.name.includes(q)) return false;
+    if(smFilter==='CHANGED') return changedSet.has(s.name);
+    if(smFilter!=='ALL') return smKey(pendingShifts[s.name])===smFilter;
+    return true;
+  });
+  // 篩選或搜尋時順序不連續，暫停排序功能避免誤動
+  const canReorder=smFilter==='ALL' && !q;
+  grid.innerHTML='';
+  if(!STAFF.length){ grid.innerHTML='<div class="sm-empty">尚無人員，請按「＋ 新增人員」</div>'; return; }
+  if(!rows.length){ grid.innerHTML='<div class="sm-empty">沒有符合條件的人員</div>'; return; }
+  let dragSrc=null;
+  rows.forEach(({s,i})=>{
+    const cur=pendingShifts[s.name];
+    const key=smKey(cur);
+    const def=normalizeShiftValue(s.shift);
+    const isChanged=changedSet.has(s.name);
+    const row=document.createElement('div');
+    row.className=`sm-row s${key}${isChanged?' changed':''}`;
+    row.dataset.name=s.name;
+    // 一般組合是 E+N；若資料裡是其他彈性組合（例如 D+E），額外顯示一顆讓它保持可選
+    const otherPair=Array.isArray(cur)&&cur.join('')!=='EN'?cur:null;
+    const segBtns=[['D','D'],['E','E'],['N','N'],['EN','⚡E+N']];
+    if(otherPair) segBtns.push([otherPair.join(''),'⚡'+otherPair.join('+')]);
+    const curCode=Array.isArray(cur)?cur.join(''):cur;
+    row.innerHTML=`
+      <div class="sm-order">
+        <button type="button" data-move="-1" title="往上移" aria-label="往上移" ${canReorder&&i>0?'':'disabled'}>▲</button>
+        <button type="button" data-move="1" title="往下移" aria-label="往下移" ${canReorder&&i<STAFF.length-1?'':'disabled'}>▼</button>
+      </div>
+      <div class="sm-idx" title="${canReorder?'可拖曳排序':''}">${i+1}</div>
+      <div class="sm-person">
+        <div class="sm-name">${escapeHtml(s.name)}</div>
+        <div class="sm-sub">
+          <span>預設 ${escapeHtml(Array.isArray(def)?def.join('+'):def)}</span>
+          ${!smSame(cur,def)?'<span class="sm-tag sm-tag-diff">本月與預設不同</span>':''}
+          ${isChanged?'<span class="sm-tag sm-tag-changed">未發布</span>':''}
+        </div>
+      </div>
+      <div class="sm-seg" role="group" aria-label="${escapeHtml(s.name)} 本月班別">
+        ${segBtns.map(([code,label])=>{
+          const on=code===curCode;
+          const onCls=on?` on-${code.length>1?'FLEX':code}`:'';
+          return `<button type="button" class="${onCls.trim()}" data-shift="${code}" aria-pressed="${on}">${label}</button>`;
+        }).join('')}
+      </div>
+      <button type="button" class="sm-edit" data-edit title="編輯人員（預設班別／移除）" aria-label="編輯 ${escapeHtml(s.name)}">✏️</button>`;
+    row.querySelectorAll('[data-shift]').forEach(b=>b.onclick=()=>smSetShift(s.name,b.dataset.shift));
+    row.querySelectorAll('[data-move]').forEach(b=>b.onclick=()=>smMove(s.name,+b.dataset.move));
+    row.querySelector('[data-edit]').onclick=()=>showEditStaffShiftModal(s.name);
+    if(canReorder){
       row.draggable=true;
-      const defaultShift=normalizeShiftValue(s.shift);
-      const cur=pendingShifts[s.name]||defaultShift;
-      const curArr=Array.isArray(cur)?cur:[cur];
-      const isFlex=curArr.length>1;
-      const shiftLabel=isFlex?curArr.join('+')+(` <span class="flex-badge-small">⚡ 彈性</span>`):
-        (curArr[0]==='D'?'<span style="color:var(--D);font-weight:700">白班 D</span>':
-         curArr[0]==='E'?'<span style="color:var(--E);font-weight:700">小夜 E</span>':
-                        '<span style="color:var(--N);font-weight:700">大夜 N</span>');
-      const shiftColor=curArr[0]==='D'?'#3b82f6':curArr[0]==='E'?'#f59e0b':curArr[0]==='N'?'#8b5cf6':'#10b981';
-      row.style.borderLeft=`3px solid ${shiftColor}`;
-      row.innerHTML=`
-        <div style="display:flex;align-items:center;gap:8px;min-width:0">
-          <span class="drag-handle" style="cursor:grab;color:#94a3b8;font-size:16px;padding:0 4px;user-select:none" title="拖曳排序">☰</span>
-          <div class="shift-name">${s.name}</div>
-        </div>
-        <div class="shift-current-wrap">
-          <div class="shift-current">${shiftLabel}</div>
-          ${isFlex?'':'<div class="flex-hint">可多選→彈性班</div>'}
-        </div>
-        <div style="display:flex;align-items:center;gap:6px">
-          <div class="shift-btns" data-name="${s.name}">
-            <button class="shift-btn ${curArr.includes('D')?'active-D':''}" onclick="toggleShiftBtn('${s.name}','D',this.parentNode)">D</button>
-            <button class="shift-btn ${curArr.includes('E')?'active-E':''}" onclick="toggleShiftBtn('${s.name}','E',this.parentNode)">E</button>
-            <button class="shift-btn ${curArr.includes('N')?'active-N':''}" onclick="toggleShiftBtn('${s.name}','N',this.parentNode)">N</button>
-          </div>
-          <button onclick="removeFromGrid('${s.name}')" style="background:#fee2e2;color:#b91c1c;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px;font-weight:700">✕</button>
-        </div>`;
-      // 拖曳排序事件（支援跨班別）
-      row.addEventListener('dragstart',e=>{
-        dragSrc=s.name;
-        e.dataTransfer.effectAllowed='move';
-        setTimeout(()=>row.style.opacity='0.4',0);
-      });
+      row.addEventListener('dragstart',e=>{ dragSrc=s.name; e.dataTransfer.effectAllowed='move'; setTimeout(()=>row.style.opacity='0.4',0); });
       row.addEventListener('dragend',()=>{ row.style.opacity='1'; dragSrc=null; });
-      row.addEventListener('dragover',e=>{
-        e.preventDefault(); e.dataTransfer.dropEffect='move';
-        row.style.outline='2px dashed #3b82f6';
-      });
-      row.addEventListener('dragleave',()=>{ row.style.outline=''; });
+      row.addEventListener('dragover',e=>{ e.preventDefault(); e.dataTransfer.dropEffect='move'; row.classList.add('drag-over'); });
+      row.addEventListener('dragleave',()=>row.classList.remove('drag-over'));
       row.addEventListener('drop',e=>{
-        e.preventDefault(); row.style.outline='';
+        e.preventDefault(); row.classList.remove('drag-over');
         if(!dragSrc||dragSrc===s.name) return;
         const fromIdx=STAFF.findIndex(x=>x.name===dragSrc);
         const toIdx=STAFF.findIndex(x=>x.name===s.name);
         if(fromIdx<0||toIdx<0) return;
         const [moved]=STAFF.splice(fromIdx,1);
         STAFF.splice(toIdx,0,moved);
-        fbSaveStaff(STAFF);
-        _loadShiftGrid(y,m);
+        smSaveOrder();
       });
-      grid.appendChild(row);
+    }
+    grid.appendChild(row);
   });
+};
+
+function smSetShift(name, code){
+  pendingShifts[name]=code.length>1?code.split(''):code;
+  smRenderAll();
 }
 
-// 新增人員到班別指派（臨時，不影響 STAFF 永久名單）
+// 順序屬於人員名單（全域），立即存檔；不會影響尚未發布的班別修改
+function smSaveOrder(){
+  fbSaveStaff(STAFF).then(()=>initSelect()).catch(()=>toast('順序儲存失敗，請重試','error'));
+  smRenderAll();
+}
+function smMove(name, delta){
+  const i=STAFF.findIndex(s=>s.name===name), j=i+delta;
+  if(i<0||j<0||j>=STAFF.length) return;
+  [STAFF[i],STAFF[j]]=[STAFF[j],STAFF[i]];
+  smSaveOrder();
+}
+
+window.smRevertChanges = function(){
+  STAFF.forEach(s=>{
+    const b=smBaseline[s.name];
+    pendingShifts[s.name]=b!=null?b:normalizeShiftValue(s.shift);
+  });
+  smRenderAll();
+  toast('已還原為上次發布的班別','info');
+};
+
+// 切換月份前，若有未發布的變更先確認，避免修改默默消失
+function smConfirmLeave(onOk, onCancel){
+  if(!smIsDirty()){ onOk(); return; }
+  const {y,m}=smLoadedYM;
+  showWarnModal({
+    icon:'⚠️',
+    title:'有未發布的變更',
+    msg:`${y}年${m}月有 ${smChangedNames().length} 人的班別修改還沒發布。\n切換月份會放棄這些修改。`,
+    buttons:[
+      {label:'先發布再切換', primary:true, onClick:async()=>{ if(await publishShifts()) onOk(); else onCancel?.(); }},
+      {label:'放棄修改並切換', danger:true, onClick:onOk},
+      {label:'取消', onClick:()=>onCancel?.()}
+    ]
+  });
+}
+window.smShiftMonth = function(delta){
+  let {y,m}=smFormYM();
+  m+=delta; if(m<1){m=12;y--;} if(m>12){m=1;y++;}
+  smConfirmLeave(()=>{ smSetFormYM(y,m); loadStaffMgmtPage(true); });
+};
+window.smOnMonthInput = function(){
+  const prev=smLoadedYM;
+  smConfirmLeave(()=>loadStaffMgmtPage(true), ()=>{ if(prev) smSetFormYM(prev.y,prev.m); });
+};
+
+// 新增人員：加入全域名單，並放進本月清單（本月班別＝預設班別，發布後生效）
 window.showAddToGridModal = function(){
-  // 建立輸入表單在 warnModal 裡
   document.getElementById('warnModalIcon').textContent='👤';
   document.getElementById('warnModalTitle').textContent='新增護理師';
   document.getElementById('warnModalMsg').innerHTML=`
@@ -4185,7 +4371,7 @@ window.showAddToGridModal = function(){
         <option value="N">N 大夜</option>
         <option value="EN">⚡ 彈性 E+N</option>
       </select>
-    </div>`;
+    </div>`.replace(/\n\s*/g,' ');
   document.getElementById('warnModalBtns').innerHTML=`
     <button id="confirmAddStaff" onclick="doAddStaff()"
       style="padding:12px;border-radius:10px;border:none;font-size:14px;font-weight:600;cursor:pointer;width:100%;background:#2563eb;color:#fff">
@@ -4200,36 +4386,37 @@ window.showAddToGridModal = function(){
   setTimeout(()=>document.getElementById('newStaffNameInput')?.focus(),100);
 };
 
-window.doAddStaff = function(){
+window.doAddStaff = async function(){
   const name=document.getElementById('newStaffNameInput')?.value.trim();
   const shift=document.getElementById('newStaffShiftInput')?.value||'D';
   if(!name){toast('請輸入姓名','error');return;}
-  if(STAFF.find(s=>s.name===name)){
-    toast(`${name} 已在名單中`,'error');return;
-  }
+  if(STAFF.find(s=>s.name===name)){ toast(`${name} 已在名單中`,'error'); return; }
   STAFF.push({name,shift});
   pendingShifts[name]=normalizeShiftValue(shift);
-  fbSaveStaff(STAFF);
-  initSelect(); // 更新登入下拉選單
+  if(!smPublished) smBaseline[name]=pendingShifts[name];
   document.getElementById('warnModal').style.display='none';
-  const y=+document.getElementById('smYear')?.value||new Date().getFullYear();
-  const m=+document.getElementById('smMonth')?.value||new Date().getMonth()+1;
-  _loadShiftGrid(y,m);
-  toast(`已新增 ${name}（${shift}班），登入選單已更新`,'success');
+  smRenderAll();
+  try{
+    await fbSaveStaff(STAFF);
+    initSelect(); // 更新登入下拉選單
+    toast(`已新增 ${name}（${shift==='EN'?'彈性 E+N':shift+'班'}）${smPublished?'，記得發布本月班別':''}`,'success');
+  }catch(e){
+    STAFF=STAFF.filter(s=>s.name!==name);
+    delete pendingShifts[name]; delete smBaseline[name];
+    smRenderAll();
+    toast('新增失敗，請重試','error');
+  }
 };
 
-// 編輯既有人員的「全域預設班別」（例如修正舊資料被誤寫的班別）
+// 編輯人員：修改「全域預設班別」或移除人員（移除放在這裡，避免在清單上誤按）
 window.showEditStaffShiftModal = function(name){
   const s=STAFF.find(x=>x.name===name);
   if(!s) return;
   const curShift=normalizeShiftValue(s.shift);
   const curVal=Array.isArray(curShift)?'EN':curShift;
   document.getElementById('warnModalIcon').textContent='✏️';
-  document.getElementById('warnModalTitle').textContent=`編輯「${name}」的預設班別`;
+  document.getElementById('warnModalTitle').textContent=`編輯「${name}」`;
   document.getElementById('warnModalMsg').innerHTML=`
-    <div style="text-align:left;margin-bottom:6px;font-size:12px;color:#64748b">
-      這是人員的「全域」預設班別，會在還沒為特定月份設定班別時作為預設值使用；不會更動已經發布過的月份。
-    </div>
     <div style="text-align:left">
       <label style="font-size:12px;color:#64748b;display:block;margin-bottom:4px">預設班別</label>
       <select id="editStaffShiftInput"
@@ -4239,16 +4426,23 @@ window.showEditStaffShiftModal = function(name){
         <option value="N" ${curVal==='N'?'selected':''}>N 大夜</option>
         <option value="EN" ${curVal==='EN'?'selected':''}>⚡ 彈性 E+N</option>
       </select>
-    </div>`;
+      <div style="font-size:11px;color:#64748b;margin-top:6px">還沒設定過的新月份會用這個班別；不會更動已經發布過的月份。</div>
+    </div>`.replace(/\n\s*/g,' ');
   document.getElementById('warnModalBtns').innerHTML=`
-    <button onclick="doEditStaffShift('${name}')"
+    <button id="smEditSave"
       style="padding:12px;border-radius:10px;border:none;font-size:14px;font-weight:600;cursor:pointer;width:100%;background:#2563eb;color:#fff">
-      確認修改
+      儲存
     </button>
     <button onclick="document.getElementById('warnModal').style.display='none'"
       style="padding:12px;border-radius:10px;border:none;font-size:14px;font-weight:600;cursor:pointer;width:100%;background:#f1f5f9;color:#374151">
       取消
+    </button>
+    <button id="smEditRemove"
+      style="padding:10px;border-radius:10px;border:1.5px solid #fecaca;font-size:13px;font-weight:600;cursor:pointer;width:100%;background:#fff;color:#dc2626;margin-top:6px">
+      🗑 從人員名單移除
     </button>`;
+  document.getElementById('smEditSave').onclick=()=>doEditStaffShift(name);
+  document.getElementById('smEditRemove').onclick=()=>removeFromGrid(name);
   window._warnBtns=[];
   document.getElementById('warnModal').style.display='flex';
 };
@@ -4257,18 +4451,23 @@ window.doEditStaffShift = async function(name){
   const idx=STAFF.findIndex(x=>x.name===name);
   if(idx<0) return;
   const prev=STAFF[idx];
+  const prevPending=pendingShifts[name], prevBase=smBaseline[name];
   STAFF[idx]={...prev,shift:newShift};
+  // 本月尚未發布、且這個人沒被手動改過 → 本月顯示也跟著新的預設班別
+  if(!smPublished && smSame(prevPending,prevBase)){
+    pendingShifts[name]=normalizeShiftValue(newShift);
+    smBaseline[name]=pendingShifts[name];
+  }
   document.getElementById('warnModal').style.display='none';
   loader(true);
   try{
     await fbSaveStaff(STAFF);
     loader(false);
-    renderStaffTable();
     initSelect();
-    loadShiftAssignGrid();
-    toast(`已將「${name}」的全域預設班別改為 ${newShift==='EN'?'⚡ 彈性 E+N':newShift+'班'} ✓`,'success');
+    smRenderAll();
+    toast(`已將「${name}」的預設班別改為 ${newShift==='EN'?'⚡ 彈性 E+N':newShift+'班'} ✓`,'success');
   }catch(e){
-    STAFF[idx]=prev;
+    STAFF[idx]=prev; pendingShifts[name]=prevPending; smBaseline[name]=prevBase;
     loader(false);
     toast('修改失敗，請稍後再試','error');
   }
@@ -4278,63 +4477,32 @@ window.removeFromGrid = function(name){
   showWarnModal({
     icon:'⚠️',
     title:`移除 ${name}？`,
-    msg:`確定要將「${name}」從人員名單移除嗎？
-移除後登入選單也會同步更新。`,
+    msg:`確定要將「${name}」從人員名單移除嗎？\n移除後登入選單也會同步更新；已發布的班表不受影響。`,
     buttons:[
-      {label:'確認移除', danger:true, onClick:()=>{
+      {label:'確認移除', danger:true, onClick:async()=>{
+        const prev=[...STAFF];
         STAFF=STAFF.filter(s=>s.name!==name);
-        delete pendingShifts[name];
-        fbSaveStaff(STAFF);
-        initSelect(); // 更新登入下拉選單
-        const y=+document.getElementById('smYear')?.value||new Date().getFullYear();
-        const m=+document.getElementById('smMonth')?.value||new Date().getMonth()+1;
-        _loadShiftGrid(y,m);
-        toast(`已移除 ${name}，登入選單已更新`,'success');
+        smRenderAll();
+        try{
+          await fbSaveStaff(STAFF);
+          initSelect(); // 更新登入下拉選單
+          toast(`已移除 ${name}，登入選單已更新`,'success');
+        }catch(e){
+          STAFF=prev; smRenderAll();
+          toast('移除失敗，請重試','error');
+        }
       }},
       {label:'取消'}
     ]
   });
 };
 
-window.toggleShiftBtn=function(name, shift, btnsEl){
-  // Get current selection as array
-  let cur=pendingShifts[name]||name; // fallback
-  const curArr=Array.isArray(cur)?[...cur]:[cur];
-  const idx=curArr.indexOf(shift);
-  if(idx>=0){
-    // Deselect - but must have at least 1 selected
-    if(curArr.length<=1){toast('至少需選擇一個班別','error');return;}
-    curArr.splice(idx,1);
-  } else {
-    // Select - max 2 shifts for flex
-    if(curArr.length>=2){toast('最多選擇兩個班別','error');return;}
-    curArr.push(shift);
-    curArr.sort();
-  }
-  pendingShifts[name]=curArr.length===1?curArr[0]:curArr;
-  // Update buttons
-  btnsEl.querySelectorAll('.shift-btn').forEach(b=>{
-    const sh=b.textContent.charAt(0); // 'D','E','N'
-    b.className=`shift-btn${curArr.includes(sh)?' active-'+sh:''}`;
-  });
-  // Update current label
-  const row=btnsEl.closest('.shift-row');
-  const curEl=row.querySelector('.shift-current');
-  const isFlex=curArr.length>1;
-  const label=isFlex?
-    curArr.join('+')+'<span class="flex-badge-small" style="margin-left:6px">⚡ 彈性</span>':
-    (curArr[0]==='D'?'<span style="color:var(--D);font-weight:700">白班 D</span>':
-     curArr[0]==='E'?'<span style="color:var(--E);font-weight:700">小夜 E</span>':
-                    '<span style="color:var(--N);font-weight:700">大夜 N</span>');
-  curEl.innerHTML=label;
-  const hintEl=row.querySelector('.flex-hint');
-  if(hintEl) hintEl.style.display=isFlex?'none':'block';
-};
-
+// 發布本月班別；成功回傳 true（切換月份前的「先發布」會用到）
 window.publishShifts=async function(){
-  const y=+document.getElementById('smYear')?.value||+document.getElementById('admYear').value;
-  const m=+document.getElementById('smMonth')?.value||+document.getElementById('admMonth').value;
-  if(!Object.keys(pendingShifts).length){toast('請先設定班別','error');return;}
+  if(!smLoadedYM){ toast('班別尚未載入','error'); return false; }
+  const {y,m}=smLoadedYM;
+  smSyncPending();
+  if(!Object.keys(pendingShifts).length){toast('請先設定班別','error');return false;}
   loader(true);
   try{
     await fbSavePublished(y,m,pendingShifts);
@@ -4343,10 +4511,9 @@ window.publishShifts=async function(){
     // 全域 STAFF 只存人員基本資料與預設班別，不能被單一月份的發布動作覆寫，否則會污染其他月份的排班/人力計算。
     latestPubShifts=pendingShifts; // 僅用於登入頁「目前生效班別」顯示的快取，不影響 STAFF
     toast(`${y}年${m}月班別已發布 ✓（僅影響 ${y}年${m}月，不會更動其他月份或人員基本資料）`,'success');
-    const _y=+document.getElementById('smYear')?.value||+document.getElementById('admYear').value;
-    const _m=+document.getElementById('smMonth')?.value||+document.getElementById('admMonth').value;
-    _loadShiftGrid(_y,_m); // refresh status
-  }catch(e){loader(false);toast('發布失敗，請重試','error');}
+    await _loadShiftGrid(y,m); // refresh status
+    return true;
+  }catch(e){loader(false);toast('發布失敗，請重試','error');return false;}
 };
 
 // ── My Schedule Page ──
@@ -5089,11 +5256,12 @@ let specialRules = []; // [{id, type, name, day, shift, minCount, maxCount, note
 let _srYear = null, _srMonth = null;
 
 // 顯示特殊規則頁面時同步年月
-window.loadStaffMgmtPage = async function(){
+window.loadStaffMgmtPage = async function(force=false){
   const y=+document.getElementById('smYear')?.value||new Date().getFullYear();
   const m=+document.getElementById('smMonth')?.value||new Date().getMonth()+1;
   syncAdminMonthSelectors(y,m); // 同步排班/特殊規則/預假頁
-  renderStaffTable();
+  // 回到同一個月且有未發布的修改 → 保留修改，只重畫
+  if(!force && smIsDirty() && smLoadedYM.y===y && smLoadedYM.m===m){ smRenderAll(); return; }
   loadShiftAssignGridForMonth(y, m);
 };
 
