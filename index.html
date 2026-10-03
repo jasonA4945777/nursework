@@ -3839,6 +3839,107 @@ window.exportScheduleExcel = async function(){
     });
   }
 
+  // ── 預假版本（第二個工作表）：只列出每個人的預假，不排入班別 ──
+  const lws=wb.addWorksheet(`${y}.${String(m).padStart(2,'0')} 預假`);
+  lws.getColumn(1).width=7;
+  for(let d=2;d<=dIM+1;d++) lws.getColumn(d).width=3.2;
+  [dIM+2,dIM+3,dIM+4].forEach(c=>lws.getColumn(c).width=5);
+
+  lws.getRow(1).height=18;
+  const lTitle=lws.getCell(1,1);
+  lTitle.value=`${y}年${m}月預假表（未排班）`;
+  lTitle.font=font(11,true,C.TITLE_FG);
+  lTitle.alignment=align('left');
+  lws.mergeCells(1,1,1,dIM+4);
+
+  lws.getRow(2).height=15;
+  const lNameHdr=lws.getCell(2,1);
+  lNameHdr.value='姓名'; lNameHdr.font=font(8,true); lNameHdr.alignment=align(); lNameHdr.border=border();
+  for(let d=0;d<dIM;d++){
+    const wd=new Date(y,m-1,d+1).getDay();
+    const isRed=natHolidays.has(d)||wd===0||wd===6;
+    const cell=lws.getCell(2,d+2);
+    cell.value=`${d+1}${WD[wd]}`;
+    cell.font=font(7,true,isRed?C.HDR_FG_HOLIDAY:'000000');
+    cell.alignment=align();
+    cell.border=border(midlineCol!==null&&d===midlineCol);
+  }
+  [['必要','856404'],['彈性','C2410C'],['總計','374151']].forEach(([v,clr],i)=>{
+    const c=lws.getCell(2,dIM+2+i);
+    c.value=v; c.font=font(8,true,clr); c.alignment=align(); c.border=border();
+  });
+
+  let lRow=3;
+  const dailyLeaveCount=new Array(dIM).fill(0);
+  groups.forEach(g=>{
+    const gs=STAFF.filter(s=>{
+      const eff=schedState.pubShifts?.[s.name]||s.shift;
+      if(g.shift==='EN') return Array.isArray(eff)||eff==='EN';
+      return !Array.isArray(eff)&&eff!=='EN'&&eff===g.shift;
+    });
+    if(!gs.length) return;
+
+    lws.getRow(lRow).height=12;
+    const grpCell=lws.getCell(lRow,1);
+    grpCell.value=g.label; grpCell.font=font(8,true); grpCell.alignment=align('left'); grpCell.border=border();
+    for(let d=0;d<dIM;d++) lws.getCell(lRow,d+2).border=border(midlineCol!==null&&d===midlineCol);
+    lRow++;
+
+    gs.forEach(s=>{
+      lws.getRow(lRow).height=14;
+      const preoffs=preoffMap[s.name];
+      const flexPreoffs=flexPreoffMap[s.name];
+      const otherByDay={};
+      (all[s.name]||[]).filter(o=>!isRealOff(o)).forEach(o=>{
+        const note=String(o.note||'');
+        otherByDay[o.day]=/IDS|ids/.test(note)?'IDS':/02|上課|支援|公假|出勤/.test(note)?'O2':(note.slice(0,2)||'');
+      });
+
+      const nameCell=lws.getCell(lRow,1);
+      nameCell.value=s.name; nameCell.font=font(8,false); nameCell.alignment=align('left'); nameCell.border=border();
+
+      for(let d=0;d<dIM;d++){
+        const cell=lws.getCell(lRow,d+2);
+        cell.border=border(midlineCol!==null&&d===midlineCol);
+        cell.alignment=align();
+        if(preoffs.has(d)){
+          cell.value='OFF'; cell.fill=fill(C.PREOFF); cell.font=font(7,true,'856404');
+          dailyLeaveCount[d]++;
+        } else if(flexPreoffs.has(d)){
+          cell.value='OFF'; cell.fill=fill(C.FLEX_PREOFF); cell.font=font(7,true,'FFFFFF');
+          dailyLeaveCount[d]++;
+        } else if(otherByDay[d]){
+          cell.value=otherByDay[d]; cell.fill=fill('FCE7F3'); cell.font=font(7,true,'BE185D');
+        }
+      }
+      [[preoffs.size,'856404'],[flexPreoffs.size,'C2410C'],[preoffs.size+flexPreoffs.size,'374151']].forEach(([v,clr],i)=>{
+        const c=lws.getCell(lRow,dIM+2+i);
+        c.value=v; c.font=font(8,true,clr); c.alignment=align(); c.border=border();
+      });
+      lRow++;
+    });
+  });
+
+  // 每日預假人數
+  lRow++;
+  lws.getRow(lRow).height=13;
+  const lCntLbl=lws.getCell(lRow,1);
+  lCntLbl.value='預假人數'; lCntLbl.font=font(8,true); lCntLbl.alignment=align('left'); lCntLbl.border=border();
+  for(let d=0;d<dIM;d++){
+    const cell=lws.getCell(lRow,d+2);
+    cell.value=dailyLeaveCount[d];
+    cell.font=font(8,true,dailyLeaveCount[d]>=DAILY_OFF_MAX?C.STAT_LOW_FG:'333333');
+    cell.alignment=align();
+    cell.border=border(midlineCol!==null&&d===midlineCol);
+  }
+
+  lRow+=2;
+  const lLegend=lws.getCell(lRow,1);
+  lLegend.value='圖例：黃色 OFF＝必要預假　橘色 OFF＝彈性預假（排得出來才放）　粉紅＝IDS / O2（上課、支援、公假等）';
+  lLegend.font=font(9,true,'334155');
+  lLegend.alignment=align('left');
+  lws.mergeCells(lRow,1,lRow,dIM+4);
+
   // 下載
   const buf=await wb.xlsx.writeBuffer();
   const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
