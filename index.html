@@ -856,7 +856,7 @@ const DAILY_OFF_MAX = 5; // 每天最多可預假人數，第 DAILY_OFF_MAX+1 �
 const TRAVEL_OVERLAP_DAYS = 4;
 const TRAVEL_OVERLAP_MAX = 2;
 const SPECIAL_OFF_NOTE_RE = /上課|支援|公假|出勤|IDS|02/i;
-const MIN_STAFF = { D:6, E:3, N:3 };
+const MIN_STAFF = { D:6, E:4, N:3 };
 const MIN_STAFF_TOTAL = MIN_STAFF.D + MIN_STAFF.E + MIN_STAFF.N;
 // 班別值統一正規化：STAFF/舊資料常見的字串 'EN' 代表「彈性 E+N」，必須轉成陣列 ['E','N']
 // 才能讓後續的 Array.isArray(eff) 判斷正確運作；否則會被當成一個不存在的班別 'EN' 直接寫進班表。
@@ -1368,6 +1368,16 @@ function getBuiltinHolidays(year) {
 }
 
 function dateKey(y,m,d){ return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`; }
+// 當月休息天數（週六、週日 + 國定假日/補假），每人當月 OFF 目標 = 此天數
+function monthRestDays(y,m,hmap){
+  const dim=new Date(y,m,0).getDate();
+  let n=0;
+  for(let d=1;d<=dim;d++){
+    const wd=new Date(y,m-1,d).getDay();
+    if(wd===0||wd===6||hmap?.[dateKey(y,m,d)]?.isHoliday) n++;
+  }
+  return n;
+}
 
 // ── Firebase: Staff List ──
 async function fbSaveStaff(staffList){
@@ -2142,7 +2152,7 @@ window.renderAllReq=async()=>{
   if(!items.some(s=>s.offs.length||s.travels.length)){list.innerHTML='<div class="empty"><div class="empty-icon">📭</div><div class="empty-text">本月尚無申請</div></div>';return;}
   // ── 超過 OFF 目標的警示區塊 ──
   const totalStaff=STAFF.length;
-  const offGoal=Math.floor((totalStaff-MIN_STAFF_TOTAL)*new Date(y,m,0).getDate()/totalStaff);
+  const offGoal=monthRestDays(y,m,hmap);
   const overLimit=items.filter(s=>{
     const realOffs=getRealOffDays(s.offs);
     return realOffs.length>offGoal;
@@ -2304,10 +2314,10 @@ window.generateSchedule=async(opts={})=>{
   // ══════════════════════════════════════
   const MAX_CONSEC = 6;
   const MIN_D=6, MAX_D=6; // 白班硬性規定固定 6 人上班（不再允許放到 7 人）
-  const MIN_E=3, MAX_E=5;
+  const MIN_E=4, MAX_E=4; // 小夜固定 4 人
   const N_COUNT=3;
   const totalStaff=STAFF.length;
-  const OFF_GOAL=Math.floor((totalStaff-MIN_STAFF_TOTAL)*dIM/totalStaff);
+  const OFF_GOAL=monthRestDays(y,m,hmap); // 每人 OFF 目標 = 當月休息天數（週末+國定假日+補假）
 
   // ── 各班 OFF 目標（方案B：E/N 共用彈性班 → 以「共池」推算可達 OFF）──
   // 用 getShift 取「當月生效班別」。輔助判斷：
@@ -2320,7 +2330,7 @@ window.generateSchedule=async(opts={})=>{
   const EN_POOL=STAFF.filter(s=>_canDo(s.name,'E')||_canDo(s.name,'N')).length;
   const EN_NEED=MIN_E+N_COUNT;
   const EN_REACH=EN_POOL>EN_NEED?Math.floor(dIM*(EN_POOL-EN_NEED)/EN_POOL):0;
-  const EN_GOAL=Math.max(0,Math.min(OFF_GOAL,EN_REACH));   // E/N/彈性 共同目標
+  const EN_GOAL=OFF_GOAL;   // 所有班別一律以當月休息天數為目標（不再用共池推算值壓低）
   // 若某位彈性班「當月被指派成純 N」（方案A），它仍在共池內，計算不受影響。
 
   // ══════════════════════════════════════
@@ -2504,9 +2514,8 @@ window.generateSchedule=async(opts={})=>{
   }
   function getShiftTargets(d0,sh){
     const req=dayReqMap[`${d0}_${sh}`]||{};
-    const isSat=new Date(y,m-1,d0+1).getDay()===6;
     return {
-      maxT:req.max??(sh==='D'?MAX_D:sh==='E'?(isSat?4:MAX_E):N_COUNT),
+      maxT:req.max??(sh==='D'?MAX_D:sh==='E'?MAX_E:N_COUNT),
       minT:req.min??(sh==='D'?MIN_D:sh==='E'?MIN_E:N_COUNT)
     };
   }
@@ -3193,7 +3202,7 @@ function renderSchedTable(y,m,days,sched,all,hmap,pubShifts={},prevStreaks={},pr
     else if(eff==='N') sc.N++;
   });
   const sb=document.createElement('div'); sb.className='stats-row';
-  const offLimitDisplay=Math.floor((STAFF.length-MIN_STAFF_TOTAL)*days/STAFF.length);
+  const offLimitDisplay=monthRestDays(y,m,hmap);
   sb.innerHTML=[{k:'D',l:'白班 D'},{k:'E',l:'小夜 E'},{k:'N',l:'大夜 N'},{k:'EN',l:'彈性班'}].map(g=>`<div class="stat-box"><div class="stat-lbl">${g.l}</div><div class="stat-val val-${g.k==='EN'?'E':g.k}">${sc[g.k]}</div></div>`).join('')+`<div class="stat-box"><div class="stat-lbl">月份天數</div><div class="stat-val">${days}</div></div><div class="stat-box"><div class="stat-lbl">OFF上限/人</div><div class="stat-val" style="color:var(--accent)">${offLimitDisplay}天</div></div><div class="stat-box"><div class="stat-lbl">最低上班人數</div><div class="stat-val" style="color:var(--ok)">13人</div></div>`;
   out.appendChild(sb);
   const hint=document.createElement('div'); hint.className='tbl-hint';
@@ -3664,6 +3673,7 @@ window.exportScheduleExcel = async function(){
   // ── 各班 ──
   // 人員資料區段，用於每日 D/E/N 統計直接掃整欄。
   let firstStaffRow=null;
+  const exportCov={D:new Array(dIM).fill(0),E:new Array(dIM).fill(0),N:new Array(dIM).fill(0)}; // 以「實際顯示的班別」統計人力（O2/IDS/公假不計）
   let lastStaffRow=null;
 
   const groups=[
@@ -3747,6 +3757,7 @@ window.exportScheduleExcel = async function(){
         const renderedV=renderedValueMap[s.name]?.[d];
         const displayV=renderedV|| (idsDays.has(d)?'IDS':o2Days.has(d)?'O2':pubOffDays.has(d)?'O2':v);
         cell.value=displayV;
+        if(exportCov[displayV]) exportCov[displayV][d]++;
         cell.border=border(isMid);
         cell.alignment=align();
         if(isPreoff){
@@ -3827,7 +3838,7 @@ window.exportScheduleExcel = async function(){
     ws.mergeCells(curRow,1,curRow,2);
 
     for(let d=0;d<dIM;d++){
-      const cnt=STAFF.filter(s=>(sched[s.name]||[])[d]===sh).length;
+      const cnt=exportCov[sh][d];
       const isMid=midlineCol!==null&&d===midlineCol;
       const isLow=cnt<minT;
       const cell=ws.getCell(curRow,d+3);
@@ -4824,7 +4835,7 @@ function collectCoverageIssues(st){
     ['D','E','N'].forEach(sh=>{
       const fallback={
         minT:MIN_STAFF[sh]||3,
-        maxT:sh==='D'?6:sh==='E'?(new Date(st.y,st.m-1,d+1).getDay()===6?4:5):3
+        maxT:sh==='D'?6:sh==='E'?4:3
       };
       const target=st.coverageTargets?.[d]?.[sh]||fallback;
       if(cov[sh]<target.minT) issues.push({day:d+1,shift:sh,count:cov[sh],target:target.minT,type:'shortage'});
@@ -4864,7 +4875,7 @@ function refreshCovRow(st){
     const cells=document.querySelectorAll(`.cov-cell-${sh}`);
     cells.forEach((c,i)=>{
       const cnt=cov[sh][i];
-      const fallback={minT:MIN_STAFF[sh]||3,maxT:sh==='D'?6:sh==='E'?(new Date(st.y,st.m-1,i+1).getDay()===6?4:5):3};
+      const fallback={minT:MIN_STAFF[sh]||3,maxT:sh==='D'?6:sh==='E'?4:3};
       const target=st.coverageTargets?.[i]?.[sh]||fallback;
       const isLow=cnt<target.minT, isHigh=cnt>target.maxT;
       c.textContent=cnt;
@@ -4919,7 +4930,7 @@ window.openStaffSuggest = function(sh, day0){
     const offCnt=r.filter(v=>!v||v==='OFF').length;
     // 計算還剩幾天及OFF緊迫度
     const totalStaff=STAFF.length;
-    const offGoal=Math.floor((totalStaff-MIN_STAFF_TOTAL)*(schedState.days||30)/totalStaff)+(s.shift==='N'?1:0);
+    const offGoal=monthRestDays(schedState.y,schedState.m,schedState.hmap);
 
     candidates.push({
       name:s.name, offCnt, offGoal,
