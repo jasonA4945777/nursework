@@ -3673,6 +3673,7 @@ window.exportScheduleExcel = async function(){
   // ── 各班 ──
   // 人員資料區段，用於每日 D/E/N 統計直接掃整欄。
   let firstStaffRow=null;
+  const exportCov={D:new Array(dIM).fill(0),E:new Array(dIM).fill(0),N:new Array(dIM).fill(0)}; // 以「實際顯示的班別」統計人力（O2/IDS/公假不計）
   let lastStaffRow=null;
 
   const groups=[
@@ -3756,6 +3757,7 @@ window.exportScheduleExcel = async function(){
         const renderedV=renderedValueMap[s.name]?.[d];
         const displayV=renderedV|| (idsDays.has(d)?'IDS':o2Days.has(d)?'O2':pubOffDays.has(d)?'O2':v);
         cell.value=displayV;
+        if(exportCov[displayV]) exportCov[displayV][d]++;
         cell.border=border(isMid);
         cell.alignment=align();
         if(isPreoff){
@@ -3836,7 +3838,7 @@ window.exportScheduleExcel = async function(){
     ws.mergeCells(curRow,1,curRow,2);
 
     for(let d=0;d<dIM;d++){
-      const cnt=STAFF.filter(s=>(sched[s.name]||[])[d]===sh).length;
+      const cnt=exportCov[sh][d];
       const isMid=midlineCol!==null&&d===midlineCol;
       const isLow=cnt<minT;
       const cell=ws.getCell(curRow,d+3);
