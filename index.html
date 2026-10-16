@@ -600,7 +600,7 @@ thead th.col-prev{background:#f8f9ff;font-size:9px;color:var(--text2);position:s
           <div class="travel-head">
             <div>
               <div class="travel-title">✈️ 出國預假</div>
-              <div class="travel-sub">登記後整段會自動加入預假：預假總數依登記順序取前 4 天為必要預假，超出的列為彈性預假；出國區間不受 4 天登記上限。共同連續重疊 4 天時最多 2 位。</div>
+              <div class="travel-sub">登記後整段會自動加入預假：預假總數依登記順序取前 4 天為必要預假，超出的列為彈性預假；出國區間不受 4 天登記上限。共同連續重疊 4 天時最多 2 位；同一天最多 3 位出國。</div>
             </div>
           </div>
           <div class="travel-form">
@@ -857,6 +857,7 @@ const DAILY_OFF_MAX_BY_YEAR = {2027:4}; // 特定年份的每日預假人數上�
 function dailyOffMax(y){ return DAILY_OFF_MAX_BY_YEAR[Number(y)]??DAILY_OFF_MAX; }
 const TRAVEL_OVERLAP_DAYS = 4;
 const TRAVEL_OVERLAP_MAX = 2;
+const TRAVEL_DAILY_MAX = 3; // 同一天最多可同時出國的人數
 const SPECIAL_OFF_NOTE_RE = /上課|支援|公假|出勤|IDS|02/i;
 const MIN_STAFF = { D:6, E:4, N:3 };
 const MIN_STAFF_TOTAL = MIN_STAFF.D + MIN_STAFF.E + MIN_STAFF.N;
@@ -1220,6 +1221,20 @@ function travelOverlapState(candidate,plans){
   }
   return {count:maxNames.length,names:maxNames,windowStart};
 }
+// 同一天出國人數檢查：回傳候選區間內「別人已出國人數」最多的那一天
+function travelDailyState(candidate,plans){
+  let maxNames=[],day=null;
+  for(let d=candidate.startDay;d<=candidate.endDay;d++){
+    const names=[...new Set(plans.filter(p=>p.name!==candidate.name&&p.startDay<=d&&p.endDay>=d).map(p=>p.name))];
+    if(names.length>maxNames.length){ maxNames=names; day=d; }
+  }
+  return {count:maxNames.length,names:maxNames,day};
+}
+function travelDailyFullError(state,m){
+  const err=new Error(`${m}/${state.day+1} 已有 ${state.names.join('、')} ${state.count} 位出國，同一天最多 ${TRAVEL_DAILY_MAX} 位`);
+  err.code='travel-daily-full';
+  return err;
+}
 function mergeAdjacentTravelRanges(candidate,ranges){
   const merged={...candidate};
   const absorbedIds=new Set();
@@ -1274,7 +1289,11 @@ window.previewTravelRange=function(){
   if(candidate.error){ preview.classList.add('blocked'); preview.textContent=candidate.error; return; }
   const {merged}=mergeAdjacentTravelRanges(candidate,myTravelRanges);
   const state=travelOverlapState(merged,travelPlansCache);
-  if(state.count>=TRAVEL_OVERLAP_MAX){
+  const dayState=travelDailyState(merged,travelPlansCache);
+  if(dayState.count>=TRAVEL_DAILY_MAX){
+    preview.classList.add('blocked');
+    preview.textContent=`⛔ ${m}/${dayState.day+1} 已有 ${dayState.names.join('、')} 出國，同一天最多 ${TRAVEL_DAILY_MAX} 位，無法加入。`;
+  }else if(state.count>=TRAVEL_OVERLAP_MAX){
     preview.classList.add('blocked');
     preview.textContent=`⛔ ${m}/${state.windowStart+1}～${m}/${state.windowStart+TRAVEL_OVERLAP_DAYS} 已有 ${state.names.join('、')}，無法再加入第 3 位。`;
   }else if(state.count===1){
@@ -1955,6 +1974,8 @@ window.saveTravelRange=async function(){
       const remainingPlans=registryPlans.filter(p=>!(p.name===me.name&&absorbedIds.has(p.id)));
       const state=travelOverlapState(merged,remainingPlans);
       if(state.count>=TRAVEL_OVERLAP_MAX) throw travelConflictError(state,m);
+      const dayState=travelDailyState(merged,remainingPlans);
+      if(dayState.count>=TRAVEL_DAILY_MAX) throw travelDailyFullError(dayState,m);
       const currentDays=Array.isArray(request.offDays)?request.offDays:[];
       for(let d=merged.startDay;d<=merged.endDay;d++){
         const alreadyHasDay=(effective[me.name]?.offDays||[]).some(entry=>Number(entry.day)===d&&isRealOff(entry));
@@ -1997,7 +2018,7 @@ window.saveTravelRange=async function(){
     toast(`已加入 ${travelPeriodText(result.merged)} 出國預假 ✓`,'success');
   }catch(e){
     console.error('saveTravelRange failed',errorDetails(e));
-    if(e?.code==='travel-overlap-full') toast(`無法加入：${e.message}`,'error');
+    if((e?.code==='travel-overlap-full'||e?.code==='travel-daily-full')) toast(`無法加入：${e.message}`,'error');
     else if(e?.code==='daily-off-full') toast(`無法加入出國預假：${e.message}。請調整行程日期`,'error');
     else if(e?.code==='travel-special-day') toast(e.message,'error');
     else toast('出國預假儲存失敗，請稍後再試','error');
