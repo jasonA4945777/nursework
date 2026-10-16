@@ -853,6 +853,8 @@ const db = getFirestore(app);
 const ADMIN_PWD = '2026N13';
 const OFF_MAX = 4; // 每人必要預假上限（天），第 OFF_MAX+1 天起為彈性預假
 const DAILY_OFF_MAX = 5; // 每天最多可預假人數，第 DAILY_OFF_MAX+1 人起鎖定不可再選
+const DAILY_OFF_MAX_BY_YEAR = {2027:4}; // 特定年份的每日預假人數上限（未列出的年份用 DAILY_OFF_MAX）
+function dailyOffMax(y){ return DAILY_OFF_MAX_BY_YEAR[Number(y)]??DAILY_OFF_MAX; }
 const TRAVEL_OVERLAP_DAYS = 4;
 const TRAVEL_OVERLAP_MAX = 2;
 const SPECIAL_OFF_NOTE_RE = /上課|支援|公假|出勤|IDS|02/i;
@@ -1090,8 +1092,9 @@ function dailyOffApplicants(requests,day,excludeName=''){
     };
   }).filter(Boolean).sort((a,b)=>a.submittedAt.localeCompare(b.submittedAt)||a.name.localeCompare(b.name,'zh-TW'));
 }
-function dailyOffFullError(day,m,applicants){
-  const err=new Error(`${m}/${day+1} 已有 ${DAILY_OFF_MAX} 人預假：${applicants.slice(0,DAILY_OFF_MAX).map(item=>item.name).join('、')}`);
+function dailyOffFullError(day,m,applicants,y){
+  const max=dailyOffMax(y);
+  const err=new Error(`${m}/${day+1} 已有 ${max} 人預假：${applicants.slice(0,max).map(item=>item.name).join('、')}`);
   err.code='daily-off-full';
   err.day=day;
   err.applicants=applicants.map(item=>item.name);
@@ -1116,7 +1119,7 @@ async function fbSaveWithDailyLimit(name,y,m,days,addedDays=[]){
       const alreadyHasDay=(effective[name]?.offDays||[]).some(entry=>Number(entry.day)===day&&isRealOff(entry));
       if(alreadyHasDay) continue;
       const applicants=dailyOffApplicants(effective,day,name);
-      if(applicants.length>=DAILY_OFF_MAX) throw dailyOffFullError(day,m,applicants);
+      if(applicants.length>=dailyOffMax(y)) throw dailyOffFullError(day,m,applicants,y);
     }
     transaction.set(requestRef,{name,year:y,month:m,offDays:days,updatedAt:new Date().toISOString()},{merge:true});
   });
@@ -1126,10 +1129,11 @@ function findUserDailyLimitConflicts(name,requests,y,m){
   const daysInMonth=new Date(y,m,0).getDate();
   for(let day=0;day<daysInMonth;day++){
     const applicants=dailyOffApplicants(requests,day);
-    if(applicants.length<=DAILY_OFF_MAX) continue;
+    const max=dailyOffMax(y);
+    if(applicants.length<=max) continue;
     const position=applicants.findIndex(item=>item.name===name);
-    if(position>=DAILY_OFF_MAX){
-      conflicts.push({day,total:applicants.length,position:position+1,kept:applicants.slice(0,DAILY_OFF_MAX).map(item=>item.name)});
+    if(position>=max){
+      conflicts.push({day,total:applicants.length,position:position+1,kept:applicants.slice(0,max).map(item=>item.name)});
     }
   }
   return conflicts;
@@ -1140,8 +1144,8 @@ function renderDailyLimitNotice(y,m){
   const conflicts=[...myDailyLimitConflicts.values()].sort((a,b)=>a.day-b.day);
   if(!conflicts.length){ notice.className='daily-limit-notice'; notice.innerHTML=''; return; }
   notice.className='daily-limit-notice show';
-  notice.innerHTML=`<div class="daily-limit-notice-title">⚠️ 你的預假有 ${conflicts.length} 天超過每日 ${DAILY_OFF_MAX} 人上限，請更改日期；若已截止請洽管理者</div>`+
-    conflicts.map(item=>`<div class="daily-limit-notice-item"><b>${m}/${item.day+1}</b> 共有 ${item.total} 人，你是第 ${item.position} 位；前 ${DAILY_OFF_MAX} 位為：${escapeHtml(item.kept.join('、'))}</div>`).join('');
+  notice.innerHTML=`<div class="daily-limit-notice-title">⚠️ 你的預假有 ${conflicts.length} 天超過每日 ${dailyOffMax(y)} 人上限，請更改日期；若已截止請洽管理者</div>`+
+    conflicts.map(item=>`<div class="daily-limit-notice-item"><b>${m}/${item.day+1}</b> 共有 ${item.total} 人，你是第 ${item.position} 位；前 ${dailyOffMax(y)} 位為：${escapeHtml(item.kept.join('、'))}</div>`).join('');
 }
 async function refreshMyDailyLimitNotices(y,m){
   const requests=await fbLoadAllRequests(y,m);
@@ -1157,7 +1161,7 @@ function computeMonthDailyFull(requests,y,m){
   const daysInMonth=new Date(y,m,0).getDate();
   for(let day=0;day<daysInMonth;day++){
     const applicants=dailyOffApplicants(requests,day);
-    if(applicants.length>=DAILY_OFF_MAX) full.set(day,applicants);
+    if(applicants.length>=dailyOffMax(y)) full.set(day,applicants);
   }
   return full;
 }
@@ -1168,7 +1172,7 @@ function renderDailyFullAnnouncement(y,m){
   const fullDays=[...monthDailyFull.entries()].sort((a,b)=>a[0]-b[0]);
   if(!fullDays.length){ notice.className='daily-full-announcement'; notice.innerHTML=''; return; }
   notice.className='daily-full-announcement show';
-  notice.innerHTML=`<div class="daily-full-announcement-title">📢 公告：以下日期預假已額滿（每日最多 ${DAILY_OFF_MAX} 人），無法再新增</div>`+
+  notice.innerHTML=`<div class="daily-full-announcement-title">📢 公告：以下日期預假已額滿（每日最多 ${dailyOffMax(y)} 人），無法再新增</div>`+
     fullDays.map(([day,applicants])=>`<div><b>${m}/${day+1}</b>：${escapeHtml(applicants.map(item=>item.name).join('、'))}</div>`).join('');
 }
 // 提醒：因 OFF_MAX 調整而被動變成彈性預假、但當初存檔時還不用填原因的日期，尚未補填原因
@@ -1723,7 +1727,7 @@ window.loadMyOff=async()=>{
     renderDailyLimitNotice(y,m);
     monthDailyFull=computeMonthDailyFull(allRequests,y,m);
     renderDailyFullAnnouncement(y,m);
-    if(myDailyLimitConflicts.size) toast(`你有 ${myDailyLimitConflicts.size} 天預假超過每日 ${DAILY_OFF_MAX} 人上限，請查看紅色通知`,'error');
+    if(myDailyLimitConflicts.size) toast(`你有 ${myDailyLimitConflicts.size} 天預假超過每日 ${dailyOffMax(y)} 人上限，請查看紅色通知`,'error');
   }catch(e){toast('載入失敗','error');}
   document.getElementById('calLoading').classList.remove('show');
   loader(false);
@@ -1793,7 +1797,7 @@ async function renderCal(y,m){
     const fullMark=isFullLocked?'<span class="full-locked-mark">已額滿</span>':'';
     el.innerHTML=`<span class="day-num">${d+1}</span>${hname?`<span class="day-hname ${isHoliday?'h':isMakeup?'mk':''}">${hname}</span>`:''}${flexMark}${overflowMark}${fullMark}${travelMark}`;
     const reason=excessDays.has(d)?getFlexReason(entry):entry?.note||'';
-    el.title=hname+(reason?` · ${reason}`:'')+(travelNames.length?`${hname||reason?' · ':''}出國：${travelNames.join('、')}`:'')+(dailyConflict?` · 超過每日 ${DAILY_OFF_MAX} 人上限，請改期`:'')+(isFullLocked?` · 已額滿（${fullApplicants.map(item=>item.name).join('、')}），無法再選`:'');
+    el.title=hname+(reason?` · ${reason}`:'')+(travelNames.length?`${hname||reason?' · ':''}出國：${travelNames.join('、')}`:'')+(dailyConflict?` · 超過每日 ${dailyOffMax(y)} 人上限，請改期`:'')+(isFullLocked?` · 已額滿（${fullApplicants.map(item=>item.name).join('、')}），無法再選`:'');
     el.addEventListener('click',()=>{
       if(isLeaveLocked(y,m)){
         toast(getLeaveLockedMessage(y,m),'error');
@@ -1956,7 +1960,7 @@ window.saveTravelRange=async function(){
         const alreadyHasDay=(effective[me.name]?.offDays||[]).some(entry=>Number(entry.day)===d&&isRealOff(entry));
         if(!alreadyHasDay){
           const applicants=dailyOffApplicants(effective,d,me.name);
-          if(applicants.length>=DAILY_OFF_MAX) throw dailyOffFullError(d,m,applicants);
+          if(applicants.length>=dailyOffMax(y)) throw dailyOffFullError(d,m,applicants,y);
         }
         const existing=currentDays.find(o=>Number(o.day)===d);
         if(existing&&!isRealOff(existing)){
@@ -3989,7 +3993,7 @@ window.exportScheduleExcel = async function(){
     {label:'D班人數',val:'D',min:6},
     {label:'E班人數',val:'E',min:4},
     {label:'N班人數',val:'N',min:3},
-    {label:'OFF人數',val:'OFF',max:DAILY_OFF_MAX},
+    {label:'OFF人數',val:'OFF',max:dailyOffMax(y)},
   ];
   lDaily.forEach(item=>{
     lws.getRow(lRow).height=13;
