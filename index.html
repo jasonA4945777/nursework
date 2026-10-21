@@ -4163,7 +4163,7 @@ function smSetFormYM(y,m){
 }
 // 名單有增減時，讓 pendingShifts 跟著 STAFF 走
 function smSyncPending(){
-  STAFF.forEach(s=>{ if(pendingShifts[s.name]==null) pendingShifts[s.name]=normalizeShiftValue(s.shift); });
+  STAFF.forEach(s=>{ if(!(s.name in pendingShifts)) pendingShifts[s.name]=null; });
   Object.keys(pendingShifts).forEach(n=>{ if(!STAFF.some(s=>s.name===n)) delete pendingShifts[n]; });
 }
 function smChangedNames(){
@@ -4198,10 +4198,10 @@ async function _loadShiftGrid(y, m){
   // 否則之後發布/排班時 'EN' 會被當成一個不存在的班別直接寫進班表格子。
   pendingShifts={}; smBaseline={};
   STAFF.forEach(s=>{
-    const v=normalizeShiftValue(pub[s.name]||s.shift);
+    // 不預設任何人的班別：本月沒發布過就是「未設定」，由護理長自行指派
+    const v=pub[s.name]!=null?normalizeShiftValue(pub[s.name]):null;
     pendingShifts[s.name]=v;
-    // 已發布的月份：新加入、還沒發布過的人算「未發布的變更」
-    smBaseline[s.name]=pubData?(pub[s.name]!=null?normalizeShiftValue(pub[s.name]):undefined):v;
+    smBaseline[s.name]=v;
   });
   smPublished=pubData;
   smLoadedYM={y,m};
@@ -4240,19 +4240,19 @@ function smRenderStatus(){
 function smRenderSummary(){
   const el=document.getElementById('smSummary');
   if(!el) return;
-  const c={D:0,E:0,N:0,FLEX:0};
-  STAFF.forEach(s=>{ const k=smKey(pendingShifts[s.name]); if(c[k]!=null) c[k]++; });
+  const c={D:0,E:0,N:0,FLEX:0,NONE:0};
+  STAFF.forEach(s=>{ const k=smKey(pendingShifts[s.name])||'NONE'; if(c[k]!=null) c[k]++; });
   el.innerHTML=[
-    ['D','白班 D',c.D],['E','小夜 E',c.E],['N','大夜 N',c.N],['FLEX','⚡ 彈性',c.FLEX],['ALL','總人數',STAFF.length]
+    ['D','白班 D',c.D],['E','小夜 E',c.E],['N','大夜 N',c.N],['FLEX','⚡ 彈性',c.FLEX],['NONE','未設定',c.NONE],['ALL','總人數',STAFF.length]
   ].map(([k,label,n])=>`<div class="sm-stat ${k}"><div class="sm-stat-label">${label}</div><div class="sm-stat-val">${n}</div></div>`).join('');
 }
 
 function smRenderFilters(){
   const el=document.getElementById('smFilters');
   if(!el) return;
-  const count=k=>k==='ALL'?STAFF.length:STAFF.filter(s=>smKey(pendingShifts[s.name])===k).length;
+  const count=k=>k==='ALL'?STAFF.length:STAFF.filter(s=>(smKey(pendingShifts[s.name])||'NONE')===k).length;
   const changed=smChangedNames().length;
-  const opts=[['ALL','全部'],['D','D'],['E','E'],['N','N'],['FLEX','⚡ 彈性']];
+  const opts=[['ALL','全部'],['D','D'],['E','E'],['N','N'],['FLEX','⚡ 彈性'],['NONE','未設定']];
   if(changed) opts.push(['CHANGED','未發布變更']);
   else if(smFilter==='CHANGED') smFilter='ALL';
   el.innerHTML=opts.map(([k,label])=>
@@ -4268,7 +4268,7 @@ window.smRenderList = function(){
   const rows=STAFF.map((s,i)=>({s,i})).filter(({s})=>{
     if(q && !s.name.includes(q)) return false;
     if(smFilter==='CHANGED') return changedSet.has(s.name);
-    if(smFilter!=='ALL') return smKey(pendingShifts[s.name])===smFilter;
+    if(smFilter!=='ALL') return (smKey(pendingShifts[s.name])||'NONE')===smFilter;
     return true;
   });
   // 篩選或搜尋時順序不連續，暫停排序功能避免誤動
@@ -4279,16 +4279,13 @@ window.smRenderList = function(){
   let dragSrc=null;
   rows.forEach(({s,i})=>{
     const cur=pendingShifts[s.name];
-    const key=smKey(cur);
-    const def=normalizeShiftValue(s.shift);
+    const key=smKey(cur)||'NONE';
     const isChanged=changedSet.has(s.name);
     const row=document.createElement('div');
     row.className=`sm-row s${key}${isChanged?' changed':''}`;
     row.dataset.name=s.name;
-    // 一般組合是 E+N；若資料裡是其他彈性組合（例如 D+E），額外顯示一顆讓它保持可選
-    const otherPair=Array.isArray(cur)&&cur.join('')!=='EN'?cur:null;
-    const segBtns=[['D','D'],['E','E'],['N','N'],['EN','⚡E+N']];
-    if(otherPair) segBtns.push([otherPair.join(''),'⚡'+otherPair.join('+')]);
+    // 彈性班有三種組合：D+E、D+N、E+N
+    const segBtns=[['D','D'],['E','E'],['N','N'],['DE','⚡D+E'],['DN','⚡D+N'],['EN','⚡E+N']];
     const curCode=Array.isArray(cur)?cur.join(''):cur;
     row.innerHTML=`
       <div class="sm-order">
@@ -4299,8 +4296,7 @@ window.smRenderList = function(){
       <div class="sm-person">
         <div class="sm-name">${escapeHtml(s.name)}</div>
         <div class="sm-sub">
-          <span>預設 ${escapeHtml(Array.isArray(def)?def.join('+'):def)}</span>
-          ${!smSame(cur,def)?'<span class="sm-tag sm-tag-diff">本月與預設不同</span>':''}
+          ${cur==null?'<span class="sm-tag sm-tag-diff">未設定班別</span>':`<span>${escapeHtml(smShiftText(cur))}</span>`}
           ${isChanged?'<span class="sm-tag sm-tag-changed">未發布</span>':''}
         </div>
       </div>
@@ -4311,7 +4307,7 @@ window.smRenderList = function(){
           return `<button type="button" class="${onCls.trim()}" data-shift="${code}" aria-pressed="${on}">${label}</button>`;
         }).join('')}
       </div>
-      <button type="button" class="sm-edit" data-edit title="編輯人員（預設班別／移除）" aria-label="編輯 ${escapeHtml(s.name)}">✏️</button>`;
+      <button type="button" class="sm-edit" data-edit title="編輯人員（移除）" aria-label="編輯 ${escapeHtml(s.name)}">✏️</button>`;
     row.querySelectorAll('[data-shift]').forEach(b=>b.onclick=()=>smSetShift(s.name,b.dataset.shift));
     row.querySelectorAll('[data-move]').forEach(b=>b.onclick=()=>smMove(s.name,+b.dataset.move));
     row.querySelector('[data-edit]').onclick=()=>showEditStaffShiftModal(s.name);
@@ -4356,7 +4352,7 @@ function smMove(name, delta){
 window.smRevertChanges = function(){
   STAFF.forEach(s=>{
     const b=smBaseline[s.name];
-    pendingShifts[s.name]=b!=null?b:normalizeShiftValue(s.shift);
+    pendingShifts[s.name]=b!=null?b:null;
   });
   smRenderAll();
   toast('已還原為上次發布的班別','info');
@@ -4398,15 +4394,7 @@ window.showAddToGridModal = function(){
         style="width:100%;padding:10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box"
         onkeydown="if(event.key==='Enter')document.getElementById('confirmAddStaff').click()">
     </div>
-    <div style="text-align:left">
-      <label style="font-size:12px;color:#64748b;display:block;margin-bottom:4px">預設班別</label>
-      <select id="newStaffShiftInput"
-        style="width:100%;padding:10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px">
-        <option value="D">D 白班</option>
-        <option value="E">E 小夜</option>
-        <option value="N">N 大夜</option>
-        <option value="EN">⚡ 彈性 E+N</option>
-      </select>
+    <div style="text-align:left;font-size:11px;color:#64748b">新增後請在清單中指派本月班別。</div>
     </div>`.replace(/\n\s*/g,' ');
   document.getElementById('warnModalBtns').innerHTML=`
     <button id="confirmAddStaff" onclick="doAddStaff()"
@@ -4424,18 +4412,18 @@ window.showAddToGridModal = function(){
 
 window.doAddStaff = async function(){
   const name=document.getElementById('newStaffNameInput')?.value.trim();
-  const shift=document.getElementById('newStaffShiftInput')?.value||'D';
+  const shift='D'; // 僅作為其他頁面的內部備援值，不代表本月班別
   if(!name){toast('請輸入姓名','error');return;}
   if(STAFF.find(s=>s.name===name)){ toast(`${name} 已在名單中`,'error'); return; }
   STAFF.push({name,shift});
-  pendingShifts[name]=normalizeShiftValue(shift);
-  if(!smPublished) smBaseline[name]=pendingShifts[name];
+  pendingShifts[name]=null;
+  smBaseline[name]=null;
   document.getElementById('warnModal').style.display='none';
   smRenderAll();
   try{
     await fbSaveStaff(STAFF);
     initSelect(); // 更新登入下拉選單
-    toast(`已新增 ${name}（${shift==='EN'?'彈性 E+N':shift+'班'}）${smPublished?'，記得發布本月班別':''}`,'success');
+    toast(`已新增 ${name}，請指派本月班別`,'success');
   }catch(e){
     STAFF=STAFF.filter(s=>s.name!==name);
     delete pendingShifts[name]; delete smBaseline[name];
@@ -4448,27 +4436,13 @@ window.doAddStaff = async function(){
 window.showEditStaffShiftModal = function(name){
   const s=STAFF.find(x=>x.name===name);
   if(!s) return;
-  const curShift=normalizeShiftValue(s.shift);
-  const curVal=Array.isArray(curShift)?'EN':curShift;
   document.getElementById('warnModalIcon').textContent='✏️';
   document.getElementById('warnModalTitle').textContent=`編輯「${name}」`;
   document.getElementById('warnModalMsg').innerHTML=`
     <div style="text-align:left">
-      <label style="font-size:12px;color:#64748b;display:block;margin-bottom:4px">預設班別</label>
-      <select id="editStaffShiftInput"
-        style="width:100%;padding:10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px">
-        <option value="D" ${curVal==='D'?'selected':''}>D 白班</option>
-        <option value="E" ${curVal==='E'?'selected':''}>E 小夜</option>
-        <option value="N" ${curVal==='N'?'selected':''}>N 大夜</option>
-        <option value="EN" ${curVal==='EN'?'selected':''}>⚡ 彈性 E+N</option>
-      </select>
-      <div style="font-size:11px;color:#64748b;margin-top:6px">還沒設定過的新月份會用這個班別；不會更動已經發布過的月份。</div>
+      <div style="font-size:12px;color:#64748b">班別請直接在清單上指派；這裡可移除人員。</div>
     </div>`.replace(/\n\s*/g,' ');
   document.getElementById('warnModalBtns').innerHTML=`
-    <button id="smEditSave"
-      style="padding:12px;border-radius:10px;border:none;font-size:14px;font-weight:600;cursor:pointer;width:100%;background:#2563eb;color:#fff">
-      儲存
-    </button>
     <button onclick="document.getElementById('warnModal').style.display='none'"
       style="padding:12px;border-radius:10px;border:none;font-size:14px;font-weight:600;cursor:pointer;width:100%;background:#f1f5f9;color:#374151">
       取消
@@ -4477,38 +4451,10 @@ window.showEditStaffShiftModal = function(name){
       style="padding:10px;border-radius:10px;border:1.5px solid #fecaca;font-size:13px;font-weight:600;cursor:pointer;width:100%;background:#fff;color:#dc2626;margin-top:6px">
       🗑 從人員名單移除
     </button>`;
-  document.getElementById('smEditSave').onclick=()=>doEditStaffShift(name);
   document.getElementById('smEditRemove').onclick=()=>removeFromGrid(name);
   window._warnBtns=[];
   document.getElementById('warnModal').style.display='flex';
 };
-window.doEditStaffShift = async function(name){
-  const newShift=document.getElementById('editStaffShiftInput')?.value||'D';
-  const idx=STAFF.findIndex(x=>x.name===name);
-  if(idx<0) return;
-  const prev=STAFF[idx];
-  const prevPending=pendingShifts[name], prevBase=smBaseline[name];
-  STAFF[idx]={...prev,shift:newShift};
-  // 本月尚未發布、且這個人沒被手動改過 → 本月顯示也跟著新的預設班別
-  if(!smPublished && smSame(prevPending,prevBase)){
-    pendingShifts[name]=normalizeShiftValue(newShift);
-    smBaseline[name]=pendingShifts[name];
-  }
-  document.getElementById('warnModal').style.display='none';
-  loader(true);
-  try{
-    await fbSaveStaff(STAFF);
-    loader(false);
-    initSelect();
-    smRenderAll();
-    toast(`已將「${name}」的預設班別改為 ${newShift==='EN'?'⚡ 彈性 E+N':newShift+'班'} ✓`,'success');
-  }catch(e){
-    STAFF[idx]=prev; pendingShifts[name]=prevPending; smBaseline[name]=prevBase;
-    loader(false);
-    toast('修改失敗，請稍後再試','error');
-  }
-};
-
 window.removeFromGrid = function(name){
   showWarnModal({
     icon:'⚠️',
@@ -4539,6 +4485,8 @@ window.publishShifts=async function(){
   const {y,m}=smLoadedYM;
   smSyncPending();
   if(!Object.keys(pendingShifts).length){toast('請先設定班別','error');return false;}
+  const unset=STAFF.filter(x=>pendingShifts[x.name]==null).map(x=>x.name);
+  if(unset.length){toast(`尚有 ${unset.length} 人未設定班別：${unset.slice(0,5).join('、')}${unset.length>5?'…':''}`,'error');return false;}
   loader(true);
   try{
     await fbSavePublished(y,m,pendingShifts);
